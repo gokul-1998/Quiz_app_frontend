@@ -11,13 +11,20 @@ export function useAuth() {
     return unsubscribe;
   }, []);
 
+  // Login using FastAPI OAuth2PasswordRequestForm (form-urlencoded: username/password)
   const login = async (email: string, password: string) => {
-    return authManager.login(email, password);
+    // Use apiService.login which already uses the correct payload
+    const result = await authManager.login(email, password);
+    return result;
   };
 
+  // Register using FastAPI (JSON: email/password)
   const register = async (email: string, password: string) => {
-    return authManager.register(email, password);
+    // Use apiService.register which already uses the correct payload
+    const result = await authManager.register(email, password);
+    return result;
   };
+
 
   const logout = () => {
     authManager.logout();

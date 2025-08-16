@@ -84,8 +84,13 @@ export function Navbar() {
                 </DropdownMenu>
               </>
             ) : (
-              // Minimal placeholder to keep layout stable before login
-              <div className="h-8" />
+              pathname !== '/login' && (
+                <Link href="/login">
+                  <Button variant="outline" className="ml-4">
+                    Login
+                  </Button>
+                </Link>
+              )
             )}
           </div>
 

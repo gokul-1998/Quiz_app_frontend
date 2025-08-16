@@ -51,7 +51,8 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
   };
 
   return (
-    <Card className="w-full max-w-md">
+    <CometCard className="w-full max-w-md">
+      <Card className="w-full max-w-md">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-4">
           <div className="p-3 bg-primary rounded-full">
@@ -126,5 +127,6 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
         </CardFooter>
       </form>
     </Card>
+    </CometCard>
   );
 }
