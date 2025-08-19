@@ -7,6 +7,8 @@ export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>(authManager.getAuthState());
 
   useEffect(() => {
+    // Ensure fresh state from localStorage after hydration
+    authManager.syncFromStorage();
     const unsubscribe = authManager.subscribe(setAuthState);
     return unsubscribe;
   }, []);

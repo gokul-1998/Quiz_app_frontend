@@ -154,6 +154,11 @@ export default function TestRunnerPage() {
         return;
       }
       toast.success('Test completed');
+      if (data && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('latest_test_result', JSON.stringify(data));
+        } catch {}
+      }
       router.push(`/tests/session/${sessionId}/result`);
     } catch (e) {
       toast.error('Failed to complete test');

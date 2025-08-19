@@ -93,6 +93,13 @@ export interface TestStats {
 }
 
 class ApiService {
+  private dispatchAuthExpired() {
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      } catch {}
+    }
+  }
   private getAuthHeaders() {
     const token = localStorage.getItem('access_token');
     return {
@@ -143,6 +150,8 @@ class ApiService {
     // Attempt a single refresh-and-retry
     const refreshed = await this.tryRefresh();
     if (!refreshed) {
+      // notify app to logout
+      this.dispatchAuthExpired();
       return this.handleResponse<T>(response);
     }
 
@@ -152,6 +161,9 @@ class ApiService {
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const retryInit: RequestInit = { ...init, headers };
     response = await fetch(`${API_BASE_URL}${path}`, retryInit);
+    if (response.status === 401) {
+      this.dispatchAuthExpired();
+    }
     return this.handleResponse<T>(response);
   }
 

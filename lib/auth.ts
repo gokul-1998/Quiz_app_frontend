@@ -41,6 +41,26 @@ class AuthManager {
     }
   }
 
+  // Ensure client-side components can force a re-read from storage after hydration
+  syncFromStorage() {
+    if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('access_token');
+    const refreshToken = localStorage.getItem('refresh_token');
+    const next: AuthState = {
+      isAuthenticated: Boolean(token && refreshToken),
+      token: token || null,
+      refreshToken: refreshToken || null,
+    };
+    const changed =
+      next.isAuthenticated !== this.authState.isAuthenticated ||
+      next.token !== this.authState.token ||
+      next.refreshToken !== this.authState.refreshToken;
+    if (changed) {
+      this.authState = next;
+      this.notifyListeners();
+    }
+  }
+
   getAuthState() {
     return this.authState;
   }

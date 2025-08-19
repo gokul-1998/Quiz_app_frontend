@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, BookOpen, Heart, Star, Calendar, Eye, Plus, Play } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function DeckDetailPage() {
   const params = useParams();
@@ -59,30 +62,53 @@ export default function DeckDetailPage() {
     }
   };
 
-  const handleStartTest = async () => {
+  // Modal state for time settings
+  const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
+  const [perCardSeconds, setPerCardSeconds] = useState<string>('20'); // default 20s, editable
+  const [totalTimeSeconds, setTotalTimeSeconds] = useState<string>(''); // optional
+
+  const confirmStartTest = async () => {
     if (!deck) return;
     try {
-      // Ask user for per-question timer (seconds)
-      const input = window.prompt('Per-question time in seconds (min 3, default 10):', '10');
-      let per = 10;
-      if (input != null && input.trim() !== '') {
-        const parsed = parseInt(input, 10);
-        if (!Number.isNaN(parsed)) {
-          per = Math.max(3, parsed);
-        }
+      // Validate per-question
+      if (perCardSeconds.trim() === '') {
+        toast.error('Enter per-question time');
+        return;
+      }
+      const perNum = Number(perCardSeconds);
+      if (!Number.isFinite(perNum) || perNum <= 0) {
+        toast.error('Per-question time must be a positive number');
+        return;
+      }
+      if (perNum < 3) {
+        toast.error('Per-question time must be at least 3 seconds');
+        return;
       }
 
-      const { data, error } = await apiService.startTestSession({ deck_id: deck.id, per_card_seconds: per });
+      // Validate optional total time
+      let total: number | undefined = undefined;
+      if (totalTimeSeconds.trim() !== '') {
+        const totalNum = Number(totalTimeSeconds);
+        if (!Number.isFinite(totalNum) || totalNum <= 0) {
+          toast.error('Total time must be a positive number');
+          return;
+        }
+        total = totalNum;
+      }
+
+      const per = perNum;
+      const { data, error } = await apiService.startTestSession({ deck_id: deck.id, per_card_seconds: per, total_time_seconds: total });
       if (error) {
         const err = error.toLowerCase();
         if (err.includes('403') || err.includes('forbidden')) {
           toast.error('You are not allowed to start a test for this private deck.');
         } else {
-          toast.error('Failed to start test');
+          toast.error(error);
         }
         return;
       }
       toast.success('Test started');
+      setIsTimeDialogOpen(false);
       if (data && (data as any).session_id) {
         router.push(`/tests/session/${(data as any).session_id}?deckId=${deck.id}&perCard=${per}`);
       }
@@ -272,9 +298,50 @@ export default function DeckDetailPage() {
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-4 mb-8">
         {(deck.visibility === 'public' || isOwner) && (
-          <Button variant="default" onClick={handleStartTest}>
-            <Play className="mr-2 h-4 w-4" /> Start Test
-          </Button>
+          <Dialog open={isTimeDialogOpen} onOpenChange={setIsTimeDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="default">
+                <Play className="mr-2 h-4 w-4" /> Start Test
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Test Time Settings</DialogTitle>
+                <DialogDescription>
+                  Configure the per-question time and optional total time limit.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="perCard" className="text-right">Per-question (s)</Label>
+                  <Input
+                    id="perCard"
+                    type="number"
+                    min={1}
+                    className="col-span-3"
+                    value={perCardSeconds}
+                    onChange={(e) => setPerCardSeconds(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="totalTime" className="text-right">Total time (s)</Label>
+                  <Input
+                    id="totalTime"
+                    type="number"
+                    placeholder="Optional"
+                    min={1}
+                    className="col-span-3"
+                    value={totalTimeSeconds}
+                    onChange={(e) => setTotalTimeSeconds(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="secondary" onClick={() => setIsTimeDialogOpen(false)}>Cancel</Button>
+                <Button onClick={confirmStartTest}>Start</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
         {isOwner && (
           <>
