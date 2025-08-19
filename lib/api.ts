@@ -110,8 +110,17 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     if (!response.ok) {
-      const error = await response.text();
-      return { error };
+      // Prefer JSON error bodies so callers can surface precise reasons (e.g., { detail: "..." })
+      try {
+        const errJson = await response.json();
+        const msg = typeof errJson?.detail === 'string'
+          ? errJson.detail
+          : (errJson?.detail ? JSON.stringify(errJson.detail) : JSON.stringify(errJson));
+        return { error: msg };
+      } catch {
+        const error = await response.text();
+        return { error };
+      }
     }
     
     if (response.status === 204) {
@@ -364,28 +373,54 @@ class ApiService {
 
   // Testing endpoints
   async startTestSession(payload: TestSessionCreate): Promise<ApiResponse<Record<string, any>>> {
+    // Ensure numeric types
+    const body = {
+      deck_id: Number(payload.deck_id),
+      ...(payload.per_card_seconds != null ? { per_card_seconds: Number(payload.per_card_seconds) } : {}),
+      ...(payload.total_time_seconds != null ? { total_time_seconds: Number(payload.total_time_seconds) } : {}),
+    };
     return this.request(`/tests/start`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   }
 
   async submitTestAnswer(session_id: string, payload: TestAnswerSubmit): Promise<ApiResponse<Record<string, any>>> {
     const sp = new URLSearchParams({ session_id });
+    // Coerce and sanitize per backend requirements
+    const sanitizedAnswer = String(payload.user_answer)
+      .replace(/[\u0000-\u001F]/g, '') // remove control chars
+      .replace(/"/g, '”')
+      .replace(/'/g, '’')
+      .replace(/--/g, '—')
+      .replace(/\/\*/g, '／＊')
+      .replace(/\*\//g, '＊／');
+    const body = {
+      card_id: Number(payload.card_id),
+      user_answer: sanitizedAnswer,
+      ...(payload.time_taken != null ? { time_taken: Number(payload.time_taken) } : {}),
+    };
     return this.request(`/tests/submit-answer?${sp.toString()}`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   }
 
   async completeTestSession(session_id: string, answers: TestAnswer[]): Promise<ApiResponse<TestSessionResult>> {
     const sp = new URLSearchParams({ session_id });
+    // Coerce list payload to correct types and strip control chars from user_answer
+    const body = (answers || []).map(a => ({
+      card_id: Number(a.card_id),
+      user_answer: String(a.user_answer).replace(/[\u0000-\u001F]/g, ''),
+      is_correct: Boolean(a.is_correct),
+      ...(a.time_taken != null ? { time_taken: Number(a.time_taken) } : {}),
+    }));
     return this.request(`/tests/complete?${sp.toString()}`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(answers),
+      body: JSON.stringify(body),
     });
   }
 

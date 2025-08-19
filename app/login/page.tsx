@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiService, Token } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,17 +16,11 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await apiService.login(email, password);
-      if (res.error) {
-        setError(res.error);
-      } else if (res.data) {
-        const tok = res.data as Token;
-        localStorage.setItem("access_token", tok.access_token);
-        localStorage.setItem("refresh_token", tok.refresh_token);
-        // Navigate to dashboard
-        router.push("/dashboard");
+      const res = await login(email, password);
+      if (!res.success) {
+        setError(res.error ?? "Login failed");
       } else {
-        setError("Unexpected response from server");
+        router.push("/dashboard");
       }
     } catch (err: any) {
       setError(err?.message ?? "Login failed");

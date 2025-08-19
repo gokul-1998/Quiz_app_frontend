@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2, BookOpen } from 'lucide-react';
+import { CometCard } from '@/components/ui/comet-card';
 
 interface RegisterFormProps {
   onToggleMode: () => void;

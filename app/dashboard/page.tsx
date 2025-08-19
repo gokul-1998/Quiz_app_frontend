@@ -22,21 +22,41 @@ export default function DashboardPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [me, setMe] = useState<Me | null>(null);
   const [stats, setStats] = useState<TestStats | null>(null);
+  const [ready, setReady] = useState(false);
 
+  // Mark client ready to avoid hydration issues
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/');
-      return;
+    setReady(true);
+  }, []);
+
+  // Auth redirect guard: only redirect if no auth AND no token in storage
+  useEffect(() => {
+    if (!ready) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    if (!isAuthenticated && !token) {
+      router.replace('/login');
     }
-    
-    // fetch current user for ownership checks
-    apiService.getMe().then(({ data }) => {
-      if (data) setMe(data);
-    }).catch(() => { /* ignore */ });
+  }, [ready, isAuthenticated, router]);
+
+  // Data fetching when authenticated (or token exists)
+  useEffect(() => {
+    if (!ready) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    if (!isAuthenticated && !token) return;
+
+    apiService
+      .getMe()
+      .then(({ data }) => {
+        if (data) setMe(data);
+      })
+      .catch(() => {
+        /* ignore */
+      });
 
     fetchDecks();
     fetchStats();
-  }, [isAuthenticated, router, searchTerm, visibilityFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, isAuthenticated, searchTerm, visibilityFilter]);
 
   const fetchDecks = async () => {
     try {
@@ -89,7 +109,12 @@ export default function DashboardPage() {
   const recentDecks = decks.slice(0, 6);
   const totalCards = decks.reduce((sum, deck) => sum + (deck.card_count || 0), 0);
 
-  if (!isAuthenticated) {
+  if (!ready) {
+    return null;
+  }
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  if (!isAuthenticated && !token) {
     return null;
   }
 
