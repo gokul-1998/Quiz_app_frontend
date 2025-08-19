@@ -20,7 +20,7 @@ export default function MyDecksPage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
+  const [visibilityFilter, setVisibilityFilter] = useState<"all" | "favorites" | "public" | "private">("all");
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -53,6 +53,7 @@ export default function MyDecksPage() {
   const myDecks = useMemo(() => {
     const base = me ? decks.filter((d) => (d as any).owner_id === me.id || (d as any).owner?.id === me.id) : [];
     const filtered = base.filter((d) => {
+      if (visibilityFilter === "favorites") return d.favourite === true;
       if (visibilityFilter === "public") return d.is_public === true;
       if (visibilityFilter === "private") return d.is_public === false;
       return true;
@@ -104,6 +105,7 @@ export default function MyDecksPage() {
         <Tabs value={visibilityFilter} onValueChange={(v) => setVisibilityFilter(v as any)} className="mb-6">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="favorites">Favorites</TabsTrigger>
             <TabsTrigger value="public">Public</TabsTrigger>
             <TabsTrigger value="private">Private</TabsTrigger>
           </TabsList>
@@ -140,8 +142,8 @@ export default function MyDecksPage() {
                 key={deck.id}
                 deck={deck}
                 canManage={true}
-                onDeleted={handleDeleted}
-                onUpdated={handleUpdated}
+                onDelete={handleDeleted}
+                onUpdate={handleUpdated}
               />
             ))}
           </div>

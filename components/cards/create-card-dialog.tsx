@@ -42,9 +42,20 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
       return;
     }
 
-    if (qtype === 'mcq' && options.some(option => !option.trim())) {
-      toast.error('Please fill in all options for multiple choice questions');
-      return;
+    if (qtype === 'mcq') {
+      const trimmedOptions = options.map(o => o.trim()).filter(Boolean);
+      if (trimmedOptions.length < 2) {
+        toast.error('Please provide at least 2 options for multiple choice');
+        return;
+      }
+      if (trimmedOptions.some(option => option.length === 0)) {
+        toast.error('Please fill in all options for multiple choice questions');
+        return;
+      }
+      if (!trimmedOptions.includes(answer.trim())) {
+        toast.error('For MCQ, the answer must exactly match one of the options');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -60,7 +71,7 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
       const { data, error } = await apiService.createCard(deckId, cardData);
       
       if (error) {
-        toast.error('Failed to create card');
+        toast.error(typeof error === 'string' ? error : 'Failed to create card');
         return;
       }
 
@@ -70,8 +81,9 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
         setOpen(false);
         resetForm();
       }
-    } catch (error) {
-      toast.error('Failed to create card');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to create card';
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

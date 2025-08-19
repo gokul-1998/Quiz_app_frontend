@@ -383,18 +383,24 @@ class ApiService {
     });
   }
 
-  // Testing endpoints
-  async startTestSession(payload: TestSessionCreate): Promise<ApiResponse<Record<string, any>>> {
-    // Ensure numeric types
-    const body = {
-      deck_id: Number(payload.deck_id),
-      ...(payload.per_card_seconds != null ? { per_card_seconds: Number(payload.per_card_seconds) } : {}),
-      ...(payload.total_time_seconds != null ? { total_time_seconds: Number(payload.total_time_seconds) } : {}),
-    };
+  // Tests endpoints
+  async startTestSession(payload: { deck_id: number; per_card_seconds: number; total_time_seconds?: number }): Promise<ApiResponse<{ session_id: string }>> {
     return this.request(`/tests/start`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        deck_id: Number(payload.deck_id),
+        per_card_seconds: Number(payload.per_card_seconds),
+        ...(payload.total_time_seconds !== undefined && { total_time_seconds: Number(payload.total_time_seconds) }),
+      }),
+    });
+  }
+
+  async getTestResult(session_id: string): Promise<ApiResponse<TestSessionResult>> {
+    const qs = `session_id=${encodeURIComponent(session_id)}`;
+    return this.request(`/tests/results?${qs}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
     });
   }
 

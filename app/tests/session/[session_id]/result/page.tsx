@@ -28,7 +28,11 @@ export default function TestResultPage() {
         }
       }
     } catch {}
-    // No direct fetch endpoint given; stay minimal and show a friendly message.
+    // Fallback: fetch from backend by session_id
+    (async () => {
+      const { data } = await apiService.getTestResult(sessionId);
+      if (data) setResult(data);
+    })();
   }, [sessionId]);
 
   const accuracyPct = useMemo(() => {

@@ -62,6 +62,91 @@ export default function DeckDetailPage() {
     }
   };
 
+  // Card edit/delete state
+  const [editingCard, setEditingCard] = useState<CardType | null>(null);
+  const [editQuestion, setEditQuestion] = useState('');
+  const [editAnswer, setEditAnswer] = useState('');
+  const [editOptions, setEditOptions] = useState<string[]>([]);
+  const [isSavingCard, setIsSavingCard] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState<number | null>(null);
+
+  const openEditCard = (card: CardType) => {
+    setEditingCard(card);
+    setEditQuestion(card.question || '');
+    setEditAnswer(card.answer || '');
+    setEditOptions(card.options ? [...card.options] : []);
+  };
+
+  const closeEditCard = () => {
+    setEditingCard(null);
+    setIsSavingCard(false);
+  };
+
+  const handleSaveCard = async () => {
+    if (!deck || !editingCard) return;
+    if (!editQuestion.trim()) {
+      toast.error('Question is required');
+      return;
+    }
+    if (!editAnswer.trim()) {
+      toast.error('Answer is required');
+      return;
+    }
+    if (editingCard.qtype === 'mcq') {
+      const opts = (editOptions || []).map(o => o.trim()).filter(Boolean);
+      if (opts.length < 2) {
+        toast.error('MCQ must have at least 2 options');
+        return;
+      }
+      if (!opts.includes(editAnswer.trim())) {
+        toast.error('Answer must be one of the options');
+        return;
+      }
+    }
+
+    setIsSavingCard(true);
+    try {
+      const payload: Partial<CardType> = {
+        question: editQuestion,
+        answer: editAnswer,
+        ...(editingCard.qtype === 'mcq' ? { options: editOptions } : {}),
+      } as any;
+      const { data, error } = await apiService.updateCard(deck.id, editingCard.id, payload);
+      if (error) {
+        toast.error('Failed to update card');
+        return;
+      }
+      if (data) {
+        setCards(prev => prev.map(c => (c.id === editingCard.id ? { ...c, ...data } : c)));
+        toast.success('Card updated');
+        closeEditCard();
+      }
+    } catch (_) {
+      toast.error('Failed to update card');
+    } finally {
+      setIsSavingCard(false);
+    }
+  };
+
+  const handleDeleteCard = async (cardId: number) => {
+    if (!deck) return;
+    setDeletingCardId(cardId);
+    try {
+      const { error } = await apiService.deleteCard(deck.id, cardId);
+      if (error) {
+        toast.error('Failed to delete card');
+        return;
+      }
+      setCards(prev => prev.filter(c => c.id !== cardId));
+      setDeck((prev: Deck | null) => prev ? { ...prev, card_count: Math.max((prev.card_count || 1) - 1, 0) } : prev);
+      toast.success('Card deleted');
+    } catch (_) {
+      toast.error('Failed to delete card');
+    } finally {
+      setDeletingCardId(null);
+    }
+  };
+
   // Modal state for time settings
   const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
   const [perCardSeconds, setPerCardSeconds] = useState<string>('20'); // default 20s, editable
@@ -383,14 +468,81 @@ export default function DeckDetailPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {cards.map((card: CardType, index: number) => (
-              <div key={card.id}>
+            {cards.map((card: CardType) => (
+              <div key={card.id} className="space-y-3">
                 <CardPreview card={card} />
+                {isOwner && (
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => openEditCard(card)}>Edit</Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={deletingCardId === card.id}
+                      onClick={() => handleDeleteCard(card.id)}
+                    >
+                      {deletingCardId === card.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+      {/* Edit Card Dialog */}
+      {isOwner && editingCard && (
+        <Dialog open={!!editingCard} onOpenChange={(open) => !open && closeEditCard()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Card</DialogTitle>
+              <DialogDescription>Update the question, answer, and options.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="q">Question</Label>
+                <Input id="q" value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="a">Answer</Label>
+                <Input id="a" value={editAnswer} onChange={(e) => setEditAnswer(e.target.value)} />
+              </div>
+              {editingCard.qtype === 'mcq' && (
+                <div>
+                  <Label>Options</Label>
+                  <div className="space-y-2 mt-2">
+                    {editOptions.map((opt, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <Input
+                          value={opt}
+                          onChange={(e) => {
+                            const next = [...editOptions];
+                            next[idx] = e.target.value;
+                            setEditOptions(next);
+                          }}
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setEditOptions(editOptions.filter((_, i) => i !== idx))}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="secondary" size="sm" onClick={() => setEditOptions([...(editOptions || []), ''])}>
+                      Add option
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="secondary" onClick={closeEditCard}>Cancel</Button>
+              <Button onClick={handleSaveCard} disabled={isSavingCard}>{isSavingCard ? 'Saving...' : 'Save'}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

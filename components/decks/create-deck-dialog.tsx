@@ -47,12 +47,14 @@ export function CreateDeckDialog({ onDeckCreated }: CreateDeckDialogProps) {
         description: description.trim() || undefined,
         tags: tags.trim() || undefined,
         visibility,
-      };
+        // add boolean for servers that expect is_public instead of visibility
+        is_public: visibility === 'public',
+      } as any;
 
       const { data, error } = await apiService.createDeck(deckData);
       
       if (error) {
-        toast.error('Failed to create deck');
+        toast.error(typeof error === 'string' ? error : 'Failed to create deck');
         return;
       }
 
@@ -62,8 +64,9 @@ export function CreateDeckDialog({ onDeckCreated }: CreateDeckDialogProps) {
         setOpen(false);
         resetForm();
       }
-    } catch (error) {
-      toast.error('Failed to create deck');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to create deck';
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

@@ -28,7 +28,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/decks', label: 'My Decks' },
+    { href: '/my-decks', label: 'My Decks' },
   ];
 
   // Always render a stable <nav> to avoid SSR/CSR mismatch.

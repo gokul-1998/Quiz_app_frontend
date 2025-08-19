@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('public');
   const [me, setMe] = useState<Me | null>(null);
   const [stats, setStats] = useState<TestStats | null>(null);
   const [ready, setReady] = useState(false);
@@ -249,25 +249,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {favoriteDecks.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Star className="h-5 w-5 text-yellow-500" />
-                <h2 className="text-xl font-semibold">Favorite Decks</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {favoriteDecks.map((deck) => (
-                  <DeckCard
-                    key={deck.id}
-                    deck={deck}
-                    canManage={me ? me.id === deck.owner_id : false}
-                    onUpdate={handleDeckUpdated}
-                    onDelete={handleDeckDeleted}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Favorite section removed to keep favorites in My Decks only */}
 
           <div>
             <h2 className="text-xl font-semibold mb-4">All Decks</h2>
