@@ -31,6 +31,9 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
   const [answer, setAnswer] = useState('');
   const [qtype, setQtype] = useState<'mcq' | 'fillups' | 'match'>('mcq');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
+  // Match type: exactly 4 pairs (left prompts and right answers)
+  const [matchLeft, setMatchLeft] = useState<string[]>(['', '', '', '']);
+  const [matchRight, setMatchRight] = useState<string[]>(['', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -56,17 +59,43 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
         toast.error('For MCQ, the answer must exactly match one of the options');
         return;
       }
+    } else if (qtype === 'match') {
+      const left = matchLeft.map(v => v.trim());
+      const right = matchRight.map(v => v.trim());
+      if (left.length !== 4 || right.length !== 4) {
+        toast.error('Matching requires exactly 4 pairs');
+        return;
+      }
+      if (left.some(v => !v) || right.some(v => !v)) {
+        toast.error('Please fill all 8 fields for matching');
+        return;
+      }
     }
 
     setIsLoading(true);
     
     try {
-      const cardData = {
-        question: question.trim(),
-        answer: answer.trim(),
-        qtype,
-        ...(qtype === 'mcq' && { options: options.map(opt => opt.trim()) }),
-      };
+      let cardData: any = {};
+
+      if (qtype === 'match') {
+        // For matching: question holds left items, options holds right (to allow shuffling later),
+        // and answer encodes the correct mapping by row as "0->0,1->1,2->2,3->3".
+        const left = matchLeft.map(v => v.trim());
+        const right = matchRight.map(v => v.trim());
+        cardData = {
+          question: left.join('|'),
+          answer: '0->0,1->1,2->2,3->3',
+          qtype: 'match',
+          options: right,
+        };
+      } else {
+        cardData = {
+          question: question.trim(),
+          answer: answer.trim(),
+          qtype,
+          ...(qtype === 'mcq' && { options: options.map(opt => opt.trim()) }),
+        };
+      }
 
       const { data, error } = await apiService.createCard(deckId, cardData);
       
@@ -78,7 +107,7 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
       if (data) {
         toast.success('Card created successfully');
         onCardCreated(data);
-        setOpen(false);
+        // Keep dialog open to allow adding more cards
         resetForm();
       }
     } catch (error: any) {
@@ -94,6 +123,8 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
     setAnswer('');
     setQtype('mcq');
     setOptions(['', '', '', '']);
+    setMatchLeft(['', '', '', '']);
+    setMatchRight(['', '', '', '']);
     setShowPreview(false);
   };
 
@@ -120,15 +151,29 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
     }
   };
 
-  const canPreview = question.trim() && answer.trim() && (qtype !== 'mcq' || options.every(opt => opt.trim()));
+  const canPreview =
+    qtype === 'match'
+      ? matchLeft.every(v => v.trim()) && matchRight.every(v => v.trim())
+      : question.trim() && answer.trim() && (qtype !== 'mcq' || options.every(opt => opt.trim()));
 
-  const previewCard: CardType = {
-    id: 0,
-    question,
-    answer,
-    qtype,
-    ...(qtype === 'mcq' && { options }),
-  };
+  const previewCard: CardType = (() => {
+    if (qtype === 'match') {
+      return {
+        id: 0,
+        question: matchLeft.join('|'),
+        answer: '0->0,1->1,2->2,3->3',
+        qtype: 'match',
+        options: matchRight,
+      } as CardType;
+    }
+    return {
+      id: 0,
+      question,
+      answer,
+      qtype,
+      ...(qtype === 'mcq' && { options }),
+    } as CardType;
+  })();
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -183,17 +228,48 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
                 </Select>
               </div>
               
-              <div className="grid gap-2">
-                <Label htmlFor="question">Question *</Label>
-                <Textarea
-                  id="question"
-                  placeholder="Enter your question"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  disabled={isLoading}
-                  rows={3}
-                />
-              </div>
+              {qtype !== 'match' ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="question">Question *</Label>
+                  <Textarea
+                    id="question"
+                    placeholder="Enter your question"
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    disabled={isLoading}
+                    rows={3}
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  <Label>Matching Pairs (exactly 4)</Label>
+                  {[0,1,2,3].map((i) => (
+                    <div key={i} className="grid grid-cols-2 gap-2 items-center">
+                      <Input
+                        placeholder={`Left ${i + 1}`}
+                        value={matchLeft[i]}
+                        onChange={(e) => {
+                          const next = [...matchLeft];
+                          next[i] = e.target.value;
+                          setMatchLeft(next);
+                        }}
+                        disabled={isLoading}
+                      />
+                      <Input
+                        placeholder={`Right ${i + 1}`}
+                        value={matchRight[i]}
+                        onChange={(e) => {
+                          const next = [...matchRight];
+                          next[i] = e.target.value;
+                          setMatchRight(next);
+                        }}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">Right side will be shuffled during practice.</p>
+                </div>
+              )}
 
               {qtype === 'mcq' && (
                 <div className="grid gap-2">
@@ -235,22 +311,24 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
                 </div>
               )}
 
-              <div className="grid gap-2">
-                <Label htmlFor="answer">Answer *</Label>
-                <Textarea
-                  id="answer"
-                  placeholder="Enter the correct answer"
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  disabled={isLoading}
-                  rows={2}
-                />
-                {qtype === 'mcq' && (
-                  <p className="text-xs text-muted-foreground">
-                    For multiple choice, enter the exact text of the correct option.
-                  </p>
-                )}
-              </div>
+              {qtype !== 'match' && (
+                <div className="grid gap-2">
+                  <Label htmlFor="answer">Answer *</Label>
+                  <Textarea
+                    id="answer"
+                    placeholder="Enter the correct answer"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    disabled={isLoading}
+                    rows={2}
+                  />
+                  {qtype === 'mcq' && (
+                    <p className="text-xs text-muted-foreground">
+                      For multiple choice, enter the exact text of the correct option.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isLoading}>

@@ -78,6 +78,7 @@ export default function TestRunnerPage() {
         router.push(`/decks/${deckId}`);
         return;
       }
+      // keep original order (no local randomization)
       setCards(data);
     } catch (e) {
       toast.error('Failed to load questions');

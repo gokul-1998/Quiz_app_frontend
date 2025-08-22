@@ -6,6 +6,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { RegisterForm } from '@/components/auth/register-form';
 import { useAuth } from '@/hooks/use-auth';
 import { BookOpen } from 'lucide-react';
+import { apiService } from '@/lib/api';
 
 export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -17,6 +18,13 @@ export default function HomePage() {
       router.push('/dashboard');
     }
   }, [isAuthenticated, router]);
+
+  // On landing, ping /auth/me if tokens exist to validate/refresh; on failure apiService will dispatch auth:expired
+  useEffect(() => {
+    const hasAnyToken = typeof window !== 'undefined' && (localStorage.getItem('access_token') || localStorage.getItem('refresh_token'));
+    if (!hasAnyToken) return;
+    apiService.getMe().then(() => {}).catch(() => {});
+  }, []);
 
   if (isAuthenticated) {
     return null; // Show nothing while redirecting

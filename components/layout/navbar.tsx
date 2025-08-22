@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,22 @@ export function Navbar() {
     router.push('/');
   };
 
+  useEffect(() => {
+    const onExpired = () => handleLogout();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:expired', onExpired as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth:expired', onExpired as EventListener);
+      }
+    };
+  }, []);
+
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard' },
-    { href: '/my-decks', label: 'My Decks' },
+    { href: '/decks', label: 'Decks' },
+    { href: '/starred', label: 'Starred' },
   ];
 
   // Always render a stable <nav> to avoid SSR/CSR mismatch.

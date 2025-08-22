@@ -17,7 +17,7 @@ export default function TestResultPage() {
   const [result, setResult] = useState<TestSessionResult | null>(null);
 
   useEffect(() => {
-    // Prefer localStorage (saved at completion). If absent, try best-effort fetch via stats or no-op.
+    // Prefer localStorage (saved at completion). If absent, fetch from backend.
     try {
       const raw = localStorage.getItem("latest_test_result");
       if (raw) {
@@ -28,7 +28,6 @@ export default function TestResultPage() {
         }
       }
     } catch {}
-    // Fallback: fetch from backend by session_id
     (async () => {
       const { data } = await apiService.getTestResult(sessionId);
       if (data) setResult(data);

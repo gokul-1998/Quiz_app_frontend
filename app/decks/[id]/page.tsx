@@ -62,6 +62,68 @@ export default function DeckDetailPage() {
     }
   };
 
+  // Edit/Delete Deck state
+  const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
+  const [editDeckTitle, setEditDeckTitle] = useState('');
+  const [editDeckDescription, setEditDeckDescription] = useState('');
+  const [isSavingDeck, setIsSavingDeck] = useState(false);
+  const [isDeletingDeck, setIsDeletingDeck] = useState(false);
+
+  useEffect(() => {
+    if (deck) {
+      setEditDeckTitle(deck.title || '');
+      setEditDeckDescription(deck.description || '');
+    }
+  }, [deck]);
+
+  const handleSaveDeck = async () => {
+    if (!deck) return;
+    const title = editDeckTitle.trim();
+    if (!title) {
+      toast.error('Title is required');
+      return;
+    }
+    setIsSavingDeck(true);
+    try {
+      const { data, error } = await apiService.updateDeck(deck.id, {
+        title,
+        description: editDeckDescription,
+      });
+      if (error) {
+        toast.error('Failed to update deck');
+        return;
+      }
+      if (data) {
+        setDeck((prev) => (prev ? { ...prev, ...data } : prev));
+        toast.success('Deck updated');
+        setIsEditDeckOpen(false);
+      }
+    } catch (_) {
+      toast.error('Failed to update deck');
+    } finally {
+      setIsSavingDeck(false);
+    }
+  };
+
+  const handleDeleteDeck = async () => {
+    if (!deck) return;
+    if (!confirm('Delete this deck? This cannot be undone.')) return;
+    setIsDeletingDeck(true);
+    try {
+      const { error } = await apiService.deleteDeck(deck.id);
+      if (error) {
+        toast.error('Failed to delete deck');
+        return;
+      }
+      toast.success('Deck deleted');
+      router.push('/decks');
+    } catch (_) {
+      toast.error('Failed to delete deck');
+    } finally {
+      setIsDeletingDeck(false);
+    }
+  };
+
   // Card edit/delete state
   const [editingCard, setEditingCard] = useState<CardType | null>(null);
   const [editQuestion, setEditQuestion] = useState('');
@@ -203,8 +265,12 @@ export default function DeckDetailPage() {
   };
 
   const isOwner = useMemo(() => {
-    if (!deck || !me) return false;
-    return deck.owner_id === me.id;
+    if (!deck) return false;
+    // Primary check using authenticated user id
+    if (me) return deck.owner_id === me.id;
+    // Fallback: if the deck is private and visible, assume current viewer is the owner.
+    // This helps when /auth/me fails or is delayed, and private decks are owner-only visible.
+    return deck.visibility === 'private';
   }, [deck, me]);
 
   const fetchMe = async () => {
@@ -344,7 +410,6 @@ export default function DeckDetailPage() {
             {deck.description && (
               <p className="text-muted-foreground mb-4">{deck.description}</p>
             )}
-            
             <div className="flex flex-wrap gap-2 mb-4">
               {parseTags(deck.tags).map((tag) => (
                 <Badge key={tag} variant="secondary">
@@ -352,7 +417,6 @@ export default function DeckDetailPage() {
                 </Badge>
               ))}
             </div>
-
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Eye className="h-4 w-4" />
@@ -367,128 +431,161 @@ export default function DeckDetailPage() {
               </Badge>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleLike}>
-              <Heart className={`mr-2 h-4 w-4 ${deck.liked ? 'fill-current text-red-500' : ''}`} />
-              {deck.like_count}
-            </Button>
-            <Button variant="outline" onClick={handleFavorite}>
-              <Star className={`h-4 w-4 ${deck.favourite ? 'fill-current text-yellow-500' : ''}`} />
-            </Button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleLike}>
+                <Heart className={`mr-2 h-4 w-4 ${deck.liked ? 'fill-current text-red-500' : ''}`} />
+                {deck.like_count}
+              </Button>
+              <Button variant="outline" onClick={handleFavorite}>
+                <Star className={`h-4 w-4 ${deck.favourite ? 'fill-current text-yellow-500' : ''}`} />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              {(deck.visibility === 'public' || isOwner) && (
+                <Dialog open={isTimeDialogOpen} onOpenChange={setIsTimeDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="default">
+                      <Play className="mr-2 h-4 w-4" /> Start Test
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Test Time Settings</DialogTitle>
+                      <DialogDescription>
+                        Configure the per-question time and optional total time limit.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="perCard" className="text-right">Per-question (s)</Label>
+                        <Input
+                          id="perCard"
+                          type="number"
+                          min={1}
+                          className="col-span-3"
+                          value={perCardSeconds}
+                          onChange={(e) => setPerCardSeconds(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="totalTime" className="text-right">Total time (s)</Label>
+                        <Input
+                          id="totalTime"
+                          type="number"
+                          placeholder="Optional"
+                          min={1}
+                          className="col-span-3"
+                          value={totalTimeSeconds}
+                          onChange={(e) => setTotalTimeSeconds(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="secondary" onClick={() => setIsTimeDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={confirmStartTest}>Start</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+              {isOwner && (
+                <>
+                  <CreateCardDialog deckId={deckId} onCardCreated={handleCardCreated} />
+                  <AIGenerateDialog deckId={deckId} onCardCreated={handleCardCreated} />
+                  {/* Edit Deck */}
+                  <Dialog open={isEditDeckOpen} onOpenChange={setIsEditDeckOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">Edit Deck</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Edit Deck</DialogTitle>
+                        <DialogDescription>Update the deck title and description.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-3 py-2">
+                        <div>
+                          <Label htmlFor="title">Title</Label>
+                          <Input id="title" value={editDeckTitle} onChange={(e) => setEditDeckTitle(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label htmlFor="desc">Description</Label>
+                          <Input id="desc" value={editDeckDescription} onChange={(e) => setEditDeckDescription(e.target.value)} />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="secondary" onClick={() => setIsEditDeckOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSaveDeck} disabled={isSavingDeck}>{isSavingDeck ? 'Saving...' : 'Save'}</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Button variant="destructive" onClick={handleDeleteDeck} disabled={isDeletingDeck}>
+                    {isDeletingDeck ? 'Deleting...' : 'Delete Deck'}
+                  </Button>
+                </>
+              )}
+              <Button variant="outline" onClick={() => router.push(`/decks/${deckId}/match`)}>
+                Match Practice
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-        {(deck.visibility === 'public' || isOwner) && (
-          <Dialog open={isTimeDialogOpen} onOpenChange={setIsTimeDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="default">
-                <Play className="mr-2 h-4 w-4" /> Start Test
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Test Time Settings</DialogTitle>
-                <DialogDescription>
-                  Configure the per-question time and optional total time limit.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="perCard" className="text-right">Per-question (s)</Label>
-                  <Input
-                    id="perCard"
-                    type="number"
-                    min={1}
-                    className="col-span-3"
-                    value={perCardSeconds}
-                    onChange={(e) => setPerCardSeconds(e.target.value)}
-                  />
+      {deck.visibility === 'private' && !isOwner ? (
+        <Card className="text-center py-12">
+          <CardContent>
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <CardTitle className="text-xl mb-2">Private Deck</CardTitle>
+            <CardDescription>
+              Cards are only visible to the deck owner.
+            </CardDescription>
+          </CardContent>
+        </Card>
+      ) : isLoadingCards ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-6 bg-muted rounded w-1/4 mb-4"></div>
+                <div className="h-4 bg-muted rounded w-full mb-2"></div>
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : cards.length === 0 ? (
+        <Card className="text-center py-12">
+          <CardContent>
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <CardTitle className="text-xl mb-2">No Cards Yet</CardTitle>
+            <CardDescription className="mb-6">
+              Add your first flashcard to start building this deck
+            </CardDescription>
+            <div className="text-sm text-muted-foreground">Use the buttons in the top-right to add cards.</div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {cards.map((card: CardType) => (
+            <div key={card.id} className="space-y-3">
+              <CardPreview card={card} />
+              {isOwner && (
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => openEditCard(card)}>Edit</Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={deletingCardId === card.id}
+                    onClick={() => handleDeleteCard(card.id)}
+                  >
+                    {deletingCardId === card.id ? 'Deleting...' : 'Delete'}
+                  </Button>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="totalTime" className="text-right">Total time (s)</Label>
-                  <Input
-                    id="totalTime"
-                    type="number"
-                    placeholder="Optional"
-                    min={1}
-                    className="col-span-3"
-                    value={totalTimeSeconds}
-                    onChange={(e) => setTotalTimeSeconds(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="secondary" onClick={() => setIsTimeDialogOpen(false)}>Cancel</Button>
-                <Button onClick={confirmStartTest}>Start</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-        {isOwner && (
-          <>
-            <CreateCardDialog deckId={deckId} onCardCreated={handleCardCreated} />
-            <AIGenerateDialog deckId={deckId} onCardCreated={handleCardCreated} />
-          </>
-        )}
-      </div>
-
-      {/* Cards */}
-      <div>
-        <h2 className="text-2xl font-semibold mb-6">Cards ({cards.length})</h2>
-        
-        {isLoadingCards ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-6 bg-muted rounded w-1/4 mb-4"></div>
-                  <div className="h-4 bg-muted rounded w-full mb-2"></div>
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : cards.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <CardTitle className="text-xl mb-2">No Cards Yet</CardTitle>
-              <CardDescription className="mb-6">
-                Add your first flashcard to start building this deck
-              </CardDescription>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <CreateCardDialog deckId={deckId} onCardCreated={handleCardCreated} />
-                <AIGenerateDialog deckId={deckId} onCardCreated={handleCardCreated} />
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {cards.map((card: CardType) => (
-              <div key={card.id} className="space-y-3">
-                <CardPreview card={card} />
-                {isOwner && (
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => openEditCard(card)}>Edit</Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={deletingCardId === card.id}
-                      onClick={() => handleDeleteCard(card.id)}
-                    >
-                      {deletingCardId === card.id ? 'Deleting...' : 'Delete'}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {/* Edit Card Dialog */}
       {isOwner && editingCard && (
         <Dialog open={!!editingCard} onOpenChange={(open) => !open && closeEditCard()}>

@@ -14,6 +14,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Card as CardType, apiService, AIGenerateRequest } from '@/lib/api';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -30,7 +31,8 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
   const [qtype, setQtype] = useState<'mcq' | 'fillups' | 'match'>('mcq');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [generatedCard, setGeneratedCard] = useState<CardType | null>(null);
+  const [count, setCount] = useState<number>(1);
+  const [generatedCards, setGeneratedCards] = useState<CardType[]>([]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,32 +41,35 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
       toast.error('Please enter a prompt');
       return;
     }
+    if (!Number.isFinite(count) || count <= 0) {
+      toast.error('Please enter a valid number of cards to generate');
+      return;
+    }
 
     setIsGenerating(true);
     
     try {
-      const request: AIGenerateRequest = {
-        prompt: prompt.trim(),
-        desired_qtype: qtype,
-      };
-
-      const { data, error } = await apiService.generateCard(request);
-      
-      if (error) {
-        toast.error('Failed to generate card');
-        return;
-      }
-
-      if (data) {
-        setGeneratedCard({
+      const results: CardType[] = [];
+      for (let i = 0; i < count; i++) {
+        const request: AIGenerateRequest = {
+          prompt: prompt.trim(),
+          desired_qtype: qtype,
+        };
+        const { data, error } = await apiService.generateCard(request);
+        if (error || !data) {
+          toast.error('Failed to generate one of the cards');
+          continue;
+        }
+        results.push({
           id: 0,
           question: data.question,
           answer: data.answer,
           qtype: data.qtype,
           options: data.options,
         });
-        toast.success('Card generated successfully');
       }
+      setGeneratedCards(results);
+      if (results.length > 0) toast.success(`Generated ${results.length} card(s)`);
     } catch (error) {
       toast.error('Failed to generate card');
     } finally {
@@ -72,17 +77,18 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
     }
   };
 
-  const handleCreateCard = async () => {
-    if (!generatedCard) return;
+  const handleCreateCard = async (card?: CardType) => {
+    const toCreate = card ?? generatedCards[0];
+    if (!toCreate) return;
 
     setIsCreating(true);
     
     try {
       const cardData = {
-        question: generatedCard.question,
-        answer: generatedCard.answer,
-        qtype: generatedCard.qtype,
-        ...(generatedCard.qtype === 'mcq' && { options: generatedCard.options }),
+        question: toCreate.question,
+        answer: toCreate.answer,
+        qtype: toCreate.qtype,
+        ...(toCreate.qtype === 'mcq' && { options: toCreate.options }),
       };
 
       const { data, error } = await apiService.createCard(deckId, cardData);
@@ -95,8 +101,12 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
       if (data) {
         toast.success('Card created successfully');
         onCardCreated(data);
-        setOpen(false);
-        resetForm();
+        // Remove the first matching generated card if present, keep dialog open
+        if (!card) {
+          setGeneratedCards(prev => prev.slice(1));
+        } else {
+          setGeneratedCards(prev => prev.filter((c) => c !== card));
+        }
       }
     } catch (error) {
       toast.error('Failed to create card');
@@ -105,10 +115,35 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
     }
   };
 
+  const handleCreateAll = async () => {
+    if (generatedCards.length === 0) return;
+    setIsCreating(true);
+    try {
+      for (const gc of generatedCards) {
+        const cardData = {
+          question: gc.question,
+          answer: gc.answer,
+          qtype: gc.qtype,
+          ...(gc.qtype === 'mcq' && { options: gc.options }),
+        };
+        const { data } = await apiService.createCard(deckId, cardData);
+        if (data) onCardCreated(data);
+      }
+      toast.success(`Added ${generatedCards.length} card(s) to deck`);
+      setGeneratedCards([]);
+      // Keep dialog open for more operations
+    } catch (_) {
+      toast.error('Failed to add one or more cards');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const resetForm = () => {
     setPrompt('');
     setQtype('mcq');
-    setGeneratedCard(null);
+    setCount(1);
+    setGeneratedCards([]);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -119,7 +154,7 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
   };
 
   const handleRegenerate = () => {
-    setGeneratedCard(null);
+    setGeneratedCards([]);
   };
 
   return (
@@ -131,24 +166,34 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        {generatedCard ? (
+        {generatedCards.length > 0 ? (
           <div>
             <DialogHeader>
               <DialogTitle>AI Generated Card</DialogTitle>
               <DialogDescription>
-                Review the AI-generated card and add it to your deck.
+                Review the AI-generated card(s) and add them to your deck.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              <CardPreview card={generatedCard} showAnswer={true} />
+            <div className="py-4 space-y-4 max-h-[50vh] overflow-y-auto">
+              {generatedCards.map((c, idx) => (
+                <div key={idx} className="border rounded p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-muted-foreground">Card {idx + 1}</div>
+                    <Button size="sm" variant="outline" onClick={() => handleCreateCard(c)} disabled={isCreating}>
+                      Add This
+                    </Button>
+                  </div>
+                  <CardPreview card={c} showAnswer={true} />
+                </div>
+              ))}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleRegenerate} disabled={isCreating}>
                 Regenerate
               </Button>
-              <Button onClick={handleCreateCard} disabled={isCreating}>
+              <Button onClick={handleCreateAll} disabled={isCreating || generatedCards.length === 0}>
                 {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add to Deck
+                Add All
               </Button>
             </DialogFooter>
           </div>
@@ -179,15 +224,27 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
                 <Label htmlFor="prompt">Prompt *</Label>
                 <Textarea
                   id="prompt"
-                  placeholder="Describe the topic you want to create a flashcard about..."
+                  placeholder="Describe the topic you want to create flashcards about..."
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   disabled={isGenerating}
                   rows={4}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Example: "Explain photosynthesis" or "Create a question about World War 2"
+                  Example: "Explain photosynthesis" or "Create questions about World War 2"
                 </p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="count">Number of cards</Label>
+                <Input
+                  id="count"
+                  type="number"
+                  min={1}
+                  value={count}
+                  onChange={(e) => setCount(Number(e.target.value))}
+                  disabled={isGenerating}
+                />
               </div>
             </div>
             <DialogFooter>

@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('public');
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [me, setMe] = useState<Me | null>(null);
   const [stats, setStats] = useState<TestStats | null>(null);
   const [ready, setReady] = useState(false);
@@ -62,7 +62,8 @@ export default function DashboardPage() {
     try {
       const { data, error } = await apiService.getDecks({
         search: searchTerm || undefined,
-        visibility: visibilityFilter,
+        // Always fetch all to allow client-side blending of public + my private
+        visibility: 'all',
         page: 1,
         size: 20,
       });
@@ -105,9 +106,21 @@ export default function DashboardPage() {
     }
   };
 
-  const favoriteDecks = decks.filter(deck => deck.favourite);
-  const recentDecks = decks.slice(0, 6);
-  const totalCards = decks.reduce((sum, deck) => sum + (deck.card_count || 0), 0);
+  // Compute display list: Public for everyone + my private
+  const displayDecks = (() => {
+    let base = decks.filter(d => d.visibility === 'public' || (me && d.owner_id === me.id));
+    if (visibilityFilter === 'public') base = base.filter(d => d.visibility === 'public');
+    if (visibilityFilter === 'private') base = base.filter(d => me && d.owner_id === me.id && d.visibility === 'private');
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      base = base.filter(d => d.title.toLowerCase().includes(term) || (d.description || '').toLowerCase().includes(term));
+    }
+    return base;
+  })();
+
+  const favoriteDecks = displayDecks.filter(deck => deck.favourite);
+  const recentDecks = displayDecks.slice(0, 6);
+  const totalCards = displayDecks.reduce((sum, deck) => sum + (deck.card_count || 0), 0);
 
   if (!ready) {
     return null;
@@ -210,7 +223,7 @@ export default function DashboardPage() {
             </Card>
           ))}
         </div>
-      ) : decks.length === 0 ? (
+      ) : displayDecks.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -254,7 +267,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-xl font-semibold mb-4">All Decks</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {decks.map((deck) => (
+              {displayDecks.map((deck) => (
                 <DeckCard
                   key={deck.id}
                   deck={deck}
