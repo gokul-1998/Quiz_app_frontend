@@ -84,6 +84,24 @@ export interface TestSessionResult {
   answers: TestAnswer[];
 }
 
+export interface TestHistoryItem {
+  session_id: string;
+  deck_id: number;
+  deck_title: string;
+  total_cards: number;
+  correct_answers: number;
+  accuracy: number;
+  completed_at?: string | null;
+  is_completed: boolean;
+}
+
+export interface TestHistoryResponse {
+  items: TestHistoryItem[];
+  total: number;
+  page: number;
+  size: number;
+}
+
 export interface TestStats {
   total_tests_taken: number;
   total_decks_tested: number;
@@ -399,6 +417,18 @@ class ApiService {
   async getTestResult(session_id: string): Promise<ApiResponse<TestSessionResult>> {
     const qs = `session_id=${encodeURIComponent(session_id)}`;
     return this.request(`/tests/results?${qs}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  async getTestHistory(params?: { page?: number; size?: number; deck_id?: number | null; only_completed?: boolean }): Promise<ApiResponse<TestHistoryResponse>> {
+    const sp = new URLSearchParams();
+    sp.append('page', String(params?.page ?? 1));
+    sp.append('size', String(params?.size ?? 20));
+    if (params?.deck_id != null) sp.append('deck_id', String(params.deck_id));
+    if (params?.only_completed !== undefined) sp.append('only_completed', String(params.only_completed));
+    return this.request(`/tests/history?${sp.toString()}`, {
       method: 'GET',
       headers: this.getAuthHeaders(),
     });
