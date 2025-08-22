@@ -278,6 +278,7 @@ class ApiService {
     const searchParams = new URLSearchParams();
     if (params?.search) searchParams.append('search', params.search);
     if (params?.tag) searchParams.append('tag', params.tag);
+    if (params?.visibility) searchParams.append('visibility', params.visibility);
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.size) searchParams.append('size', params.size.toString());
     return this.request(`/decks/?${searchParams}`, {
@@ -389,12 +390,11 @@ class ApiService {
 
   // AI endpoints
   async generateCard(request: AIGenerateRequest): Promise<ApiResponse<AIQuestion>> {
-    const response = await fetch(`${API_BASE_URL}/ai/generate-card`, {
+    return this.request(`/ai/generate-card`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
     });
-    return this.handleResponse(response);
   }
 
   // Dashboard endpoints

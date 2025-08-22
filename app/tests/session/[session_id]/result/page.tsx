@@ -45,7 +45,7 @@ export default function TestResultPage() {
         <Card>
           <CardHeader>
             <CardTitle>Test Completed</CardTitle>
-            <CardDescription>We couldn't find a saved result for this session. It may have been cleared.</CardDescription>
+            <CardDescription>We couldn&apos;t find a saved result for this session. It may have been cleared.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p>Try completing a test again, or go back to your dashboard.</p>

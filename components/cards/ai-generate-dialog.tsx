@@ -88,7 +88,10 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
         question: toCreate.question,
         answer: toCreate.answer,
         qtype: toCreate.qtype,
-        ...(toCreate.qtype === 'mcq' && { options: toCreate.options }),
+        // Include options for MCQ and MATCH types (fillups has no options)
+        ...((toCreate.qtype === 'mcq' || toCreate.qtype === 'match') && toCreate.options
+          ? { options: toCreate.options }
+          : {}),
       };
 
       const { data, error } = await apiService.createCard(deckId, cardData);
@@ -124,7 +127,8 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
           question: gc.question,
           answer: gc.answer,
           qtype: gc.qtype,
-          ...(gc.qtype === 'mcq' && { options: gc.options }),
+          // Include options for MCQ and MATCH types
+          ...((gc.qtype === 'mcq' || gc.qtype === 'match') && gc.options ? { options: gc.options } : {}),
         };
         const { data } = await apiService.createCard(deckId, cardData);
         if (data) onCardCreated(data);
@@ -231,7 +235,7 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
                   rows={4}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Example: "Explain photosynthesis" or "Create questions about World War 2"
+                  Example: &quot;Explain photosynthesis&quot; or &quot;Create questions about World War 2&quot;
                 </p>
               </div>
 

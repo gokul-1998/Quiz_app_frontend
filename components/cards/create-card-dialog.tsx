@@ -40,9 +40,12 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!question.trim() || !answer.trim()) {
-      toast.error('Please fill in both question and answer');
-      return;
+    // Validate basics only for non-matching types
+    if (qtype !== 'match') {
+      if (!question.trim() || !answer.trim()) {
+        toast.error('Please fill in both question and answer');
+        return;
+      }
     }
 
     if (qtype === 'mcq') {

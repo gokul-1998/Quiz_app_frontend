@@ -89,7 +89,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
             Sign In
           </Button>
           <p className="text-sm text-center text-muted-foreground">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Button
               type="button"
               variant="link"

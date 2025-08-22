@@ -108,9 +108,10 @@ export default function DashboardPage() {
 
   // Compute display list: Public for everyone + my private
   const displayDecks = (() => {
-    let base = decks.filter(d => d.visibility === 'public' || (me && d.owner_id === me.id));
+    // Show everything returned by the API (it already enforces access control).
+    let base = decks;
     if (visibilityFilter === 'public') base = base.filter(d => d.visibility === 'public');
-    if (visibilityFilter === 'private') base = base.filter(d => me && d.owner_id === me.id && d.visibility === 'private');
+    if (visibilityFilter === 'private') base = base.filter(d => d.visibility === 'private');
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       base = base.filter(d => d.title.toLowerCase().includes(term) || (d.description || '').toLowerCase().includes(term));

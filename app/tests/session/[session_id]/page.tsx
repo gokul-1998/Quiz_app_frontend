@@ -12,6 +12,15 @@ import { toast } from 'sonner';
 
 const DEFAULT_PER_CARD_SECONDS = 10;
 
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export default function TestRunnerPage() {
   const params = useParams();
   const search = useSearchParams();
@@ -22,6 +31,8 @@ export default function TestRunnerPage() {
   const perCardParam = search.get('perCard');
   const deckId = deckIdParam ? parseInt(deckIdParam) : null;
   const perCardSeconds = perCardParam ? Math.max(3, parseInt(perCardParam)) : DEFAULT_PER_CARD_SECONDS;
+  const qtypeParam = search.get('qtype');
+  const onlyQtype = (qtypeParam === 'mcq' || qtypeParam === 'fillups' || qtypeParam === 'match') ? qtypeParam : null;
 
   const [cards, setCards] = useState<CardType[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -32,6 +43,15 @@ export default function TestRunnerPage() {
   const [answers, setAnswers] = useState<TestAnswerSubmit[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
+
+  // Match question state
+  const [leftItems, setLeftItems] = useState<string[]>([]);
+  const [rightItems, setRightItems] = useState<string[]>([]);
+  const [rightOrder, setRightOrder] = useState<number[]>([]); // permutation of indices
+  const [selectedLeft, setSelectedLeft] = useState<number | null>(null);
+  const [selectedRight, setSelectedRight] = useState<number | null>(null);
+  const [pairs, setPairs] = useState<Record<number, number>>({}); // left index -> right position (in permuted list)
+  const allPaired = useMemo(() => Object.keys(pairs).length === 4, [pairs]);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startedAtRef = useRef<number | null>(null);
@@ -78,8 +98,9 @@ export default function TestRunnerPage() {
         router.push(`/decks/${deckId}`);
         return;
       }
-      // keep original order (no local randomization)
-      setCards(data);
+      // keep original order (no local randomization), optional filter by qtype
+      const items = onlyQtype ? data.filter((c) => c.qtype === onlyQtype) : data;
+      setCards(items);
     } catch (e) {
       toast.error('Failed to load questions');
       router.push(`/decks/${deckId}`);
@@ -91,6 +112,57 @@ export default function TestRunnerPage() {
   const total = cards.length;
   const current = cards[currentIndex];
   const progress = useMemo(() => (total ? Math.round(((currentIndex) / total) * 100) : 0), [currentIndex, total]);
+
+  // Initialize/reset match state for each match question
+  useEffect(() => {
+    if (!current || current.qtype !== 'match') {
+      setLeftItems([]);
+      setRightItems([]);
+      setRightOrder([]);
+      setPairs({});
+      setSelectedLeft(null);
+      setSelectedRight(null);
+      return;
+    }
+    const left = (current.question || '').split('|').map((s) => s.trim()).slice(0, 4);
+    const right = (current.options || []).map((s) => String(s));
+    const order = shuffle([0, 1, 2, 3]);
+    setLeftItems(left);
+    setRightItems(right);
+    setRightOrder(order);
+    setPairs({});
+    setSelectedLeft(null);
+    setSelectedRight(null);
+  }, [current]);
+
+  const commitPair = () => {
+    if (selectedLeft == null || selectedRight == null) return;
+    setPairs((prev) => ({ ...prev, [selectedLeft]: selectedRight }));
+    setSelectedLeft(null);
+    setSelectedRight(null);
+  };
+
+  const removePair = (li: number) => {
+    setPairs((prev) => {
+      const n = { ...prev } as Record<number, number>;
+      delete n[li];
+      return n;
+    });
+  };
+
+  const createMatchAnswerString = () => {
+    const parts: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const pos = (pairs as Record<number, number>)[i];
+      if (typeof pos !== 'number' || !rightOrder.length) {
+        parts.push(`${i}->`);
+      } else {
+        const origIndex = rightOrder[pos];
+        parts.push(`${i}->${origIndex}`);
+      }
+    }
+    return parts.join(',');
+  };
 
   const submitCurrentAnswer = async (user_answer: string) => {
     if (!current) return true;
@@ -123,7 +195,15 @@ export default function TestRunnerPage() {
   const handleNext = async () => {
     if (!current) return;
     if (!submitted) {
-      const ok = await submitCurrentAnswer(answer);
+      let userAns = answer;
+      if (current.qtype === 'match') {
+        if (!allPaired) {
+          toast.error('Please pair all items before submitting');
+          return;
+        }
+        userAns = createMatchAnswerString();
+      }
+      const ok = await submitCurrentAnswer(userAns);
       if (!ok) return;
       return; // stay to show the answer; button will change to Next/Finish
     }
@@ -167,6 +247,84 @@ export default function TestRunnerPage() {
   };
 
   const renderQuestion = (card: CardType) => {
+    // Matching question UI
+    if (card.qtype === 'match') {
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Left</h3>
+              <div className="space-y-2">
+                {leftItems.map((li, i) => {
+                  const paired = (pairs as Record<number, number>)[i] != null;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedLeft(i)}
+                      className={`w-full text-left p-3 rounded border transition-colors ${
+                        selectedLeft === i ? 'border-blue-500 bg-blue-50' : paired ? 'bg-muted' : 'bg-white'
+                      }`}
+                      disabled={submitted}
+                    >
+                      <span className="font-medium mr-2">{String.fromCharCode(65 + i)}.</span>
+                      {li}
+                      {paired && <Badge className="ml-2" variant="secondary">paired</Badge>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Right</h3>
+              <div className="space-y-2">
+                {rightOrder.map((origIndex, pos) => {
+                  const value = rightItems[origIndex];
+                  const isUsed = Object.values(pairs).includes(pos);
+                  return (
+                    <button
+                      key={pos}
+                      onClick={() => setSelectedRight(pos)}
+                      className={`w-full text-left p-3 rounded border transition-colors ${
+                        selectedRight === pos ? 'border-blue-500 bg-blue-50' : isUsed ? 'bg-muted' : 'bg-white'
+                      }`}
+                      disabled={submitted}
+                    >
+                      <span className="font-medium mr-2">{pos + 1}.</span>
+                      {value}
+                      {isUsed && <Badge className="ml-2" variant="secondary">paired</Badge>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {Object.entries(pairs).map(([l, r]) => (
+              <Badge key={l} variant="outline" className="flex items-center gap-2">
+                {String.fromCharCode(65 + Number(l))} ↔ {Number(r) + 1}
+                <button
+                  className="text-xs underline"
+                  onClick={() => removePair(Number(l))}
+                  disabled={submitted}
+                >
+                  remove
+                </button>
+              </Badge>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={commitPair}
+              disabled={selectedLeft == null || selectedRight == null || submitted}
+            >
+              Pair Selected
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     // basic renderer; supports MCQ when options present, else free text
     if (card.qtype === 'mcq' && card.options && card.options.length > 0) {
       return (
@@ -254,7 +412,7 @@ export default function TestRunnerPage() {
           )}
           <div className="flex justify-between pt-2">
             <Button variant="secondary" onClick={() => router.push(`/decks/${deckId}`)}>Quit</Button>
-            <Button onClick={handleNext} disabled={isSubmitting}>
+            <Button onClick={handleNext} disabled={isSubmitting || (!submitted && current.qtype === 'match' && !allPaired)}>
               {!submitted ? 'Submit' : (currentIndex + 1 === total ? 'Finish' : 'Next')}
             </Button>
           </div>

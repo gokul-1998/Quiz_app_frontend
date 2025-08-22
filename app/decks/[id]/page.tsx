@@ -62,6 +62,55 @@ export default function DeckDetailPage() {
     }
   };
 
+  const confirmStartMatch = async () => {
+    if (!deck) return;
+    try {
+      // Use current perCardSeconds state for consistency
+      if (perCardSeconds.trim() === '') {
+        toast.error('Enter per-question time');
+        return;
+      }
+      const perNum = Number(perCardSeconds);
+      if (!Number.isFinite(perNum) || perNum <= 0) {
+        toast.error('Per-question time must be a positive number');
+        return;
+      }
+      if (perNum < 3) {
+        toast.error('Per-question time must be at least 3 seconds');
+        return;
+      }
+
+      // Optional total time
+      let total: number | undefined = undefined;
+      if (totalTimeSeconds.trim() !== '') {
+        const totalNum = Number(totalTimeSeconds);
+        if (!Number.isFinite(totalNum) || totalNum <= 0) {
+          toast.error('Total time must be a positive number');
+          return;
+        }
+        total = totalNum;
+      }
+
+      const per = perNum;
+      const { data, error } = await apiService.startTestSession({ deck_id: deck.id, per_card_seconds: per, total_time_seconds: total });
+      if (error) {
+        const err = error.toLowerCase();
+        if (err.includes('403') || err.includes('forbidden')) {
+          toast.error('You are not allowed to start a test for this private deck.');
+        } else {
+          toast.error(error);
+        }
+        return;
+      }
+      toast.success('Match practice started');
+      if (data && (data as any).session_id) {
+        router.push(`/tests/session/${(data as any).session_id}?deckId=${deck.id}&perCard=${per}&qtype=match`);
+      }
+    } catch (e) {
+      toast.error('Failed to start match practice');
+    }
+  };
+
   // Edit/Delete Deck state
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
   const [editDeckTitle, setEditDeckTitle] = useState('');
@@ -523,8 +572,8 @@ export default function DeckDetailPage() {
                   </Button>
                 </>
               )}
-              <Button variant="outline" onClick={() => router.push(`/decks/${deckId}/match`)}>
-                Match Practice
+              <Button variant="outline" onClick={confirmStartMatch}>
+                Start Match Practice
               </Button>
             </div>
           </div>
