@@ -28,8 +28,8 @@ export function useAuth() {
   };
 
 
-  const logout = () => {
-    authManager.logout();
+  const logout = async () => {
+    await authManager.logout();
   };
 
   return {

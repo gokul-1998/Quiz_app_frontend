@@ -1,21 +1,38 @@
+"use client";
 import React, { useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-function getAuthHeaders() {
-  const token = localStorage.getItem('access_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+type Question = {
+  id: number;
+  question: string;
+  qtype: string;
+  options?: string[];
+};
+
+type Answer = { card_id: number; user_answer: string };
+
+type TestResult = {
+  correct_answers: number;
+  total_cards: number;
+  accuracy: number;
+  completed_at: string;
+};
 
 export default function TestApp() {
   const [deckId, setDeckId] = useState('');
   const [testStarted, setTestStarted] = useState(false);
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState([]);
+  const [answers, setAnswers] = useState<Answer[]>([]);
   const [userAnswer, setUserAnswer] = useState('');
   const [hint, setHint] = useState('');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<TestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,23 +43,25 @@ export default function TestApp() {
     setHint('');
     setResult(null);
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      };
       const res = await fetch(`${API_BASE_URL}/tests/start`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
+        headers,
         body: JSON.stringify({ deck_id: Number(deckId) }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setQuestions(data.questions || []);
+      setQuestions((data.questions || []) as Question[]);
       setTestStarted(true);
       setCurrent(0);
       setAnswers([]);
       setUserAnswer('');
-    } catch (e) {
-      setError(e.message || 'Failed to start test');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to start test';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -54,12 +73,13 @@ export default function TestApp() {
     setLoading(true);
     setError('');
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      };
       const res = await fetch(`${API_BASE_URL}/tests/submit-answer`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
+        headers,
         body: JSON.stringify({
           card_id: questions[current].id,
           user_answer: userAnswer,
@@ -75,8 +95,9 @@ export default function TestApp() {
         // Complete test
         completeTest([...answers, { card_id: questions[current].id, user_answer: userAnswer }]);
       }
-    } catch (e) {
-      setError(e.message || 'Failed to submit answer');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to submit answer';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -87,12 +108,13 @@ export default function TestApp() {
     setLoading(true);
     setError('');
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      };
       const res = await fetch(`${API_BASE_URL}/ai/gemini-hint`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
+        headers,
         body: JSON.stringify({
           question: questions[current].question,
           qtype: questions[current].qtype,
@@ -102,32 +124,35 @@ export default function TestApp() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setHint(data.hint || 'No hint received.');
-    } catch (e) {
-      setError(e.message || 'Failed to get hint');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to get hint';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   // Complete test
-  const completeTest = async (allAnswers) => {
+  const completeTest = async (allAnswers: Answer[]) => {
     setLoading(true);
     setError('');
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      };
       const res = await fetch(`${API_BASE_URL}/tests/complete`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
+        headers,
         body: JSON.stringify(allAnswers),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setResult(data);
+      setResult(data as TestResult);
       setTestStarted(false);
-    } catch (e) {
-      setError(e.message || 'Failed to complete test');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to complete test';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -164,7 +189,7 @@ export default function TestApp() {
             <div className="mb-2">{questions[current].question}</div>
             {questions[current].qtype === 'mcq' ? (
               <div className="flex flex-col gap-2 mb-2">
-                {questions[current].options.map((opt, idx) => (
+                {(questions[current].options ?? []).map((opt, idx) => (
                   <label key={idx} className="flex items-center gap-2">
                     <input
                       type="radio"

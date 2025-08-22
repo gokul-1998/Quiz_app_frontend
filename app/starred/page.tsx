@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { apiService, Deck, Me } from "@/lib/api";
+import { apiService, Deck } from "@/lib/api";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { DeckCard } from "@/components/decks/deck-card";
 import { Input } from "@/components/ui/input";
@@ -14,24 +14,28 @@ export default function StarredPage() {
   const { isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
+  const [ownedIds, setOwnedIds] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   useEffect(() => {
     if (!isAuthenticated) return;
-
-    apiService.getMe().then(({ data }) => { if (data) setMe(data); }).catch(() => {});
-    fetchDecks();
+    fetchStarred();
   }, [isAuthenticated]);
 
-  const fetchDecks = async () => {
+  const fetchStarred = async () => {
     setIsLoading(true);
     try {
-      // Fetch all visibility and filter client-side for favourites
-      const { data, error } = await apiService.getDecks({ visibility: 'all' });
-      if (!error && data) {
-        setDecks(data.filter(d => d.favourite === true));
-      }
+      const [myRes, pubRes] = await Promise.all([
+        apiService.getMyDecks(),
+        apiService.getPublicDecks(),
+      ]);
+      const my = myRes.data ?? [];
+      const pub = pubRes.data ?? [];
+      const myFavs = my.filter(d => d.favourite);
+      const myIdSet = new Set(my.map(d => d.id));
+      const pubFavs = pub.filter(d => d.favourite && !myIdSet.has(d.id));
+      setOwnedIds(myIdSet);
+      setDecks([...myFavs, ...pubFavs]);
     } catch (_) {
       // ignore
     } finally {
@@ -51,7 +55,7 @@ export default function StarredPage() {
     return [...base].sort((a, b) => (b.like_count ?? 0) - (a.like_count ?? 0));
   }, [decks, searchTerm]);
 
-  const isOwner = (d: Deck) => (me ? d.owner_id === me.id : false);
+  const isOwner = (d: Deck) => ownedIds.has(d.id);
 
   return (
     <AuthGate>
@@ -67,11 +71,11 @@ export default function StarredPage() {
                 value={searchTerm}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === "Enter") fetchDecks();
+                  if (e.key === "Enter") fetchStarred();
                 }}
               />
             </div>
-            <Button variant="secondary" onClick={() => fetchDecks()}>Refresh</Button>
+            <Button variant="secondary" onClick={() => fetchStarred()}>Refresh</Button>
           </div>
         </div>
 

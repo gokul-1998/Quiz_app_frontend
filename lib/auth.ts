@@ -111,7 +111,11 @@ class AuthManager {
     return this.login(email, password);
   }
 
-  logout() {
+  async logout() {
+    try {
+      await apiService.logout();
+    } catch {}
+
     this.authState = {
       isAuthenticated: false,
       token: null,

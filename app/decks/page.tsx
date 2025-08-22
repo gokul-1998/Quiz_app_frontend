@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { apiService, Deck, Me } from "@/lib/api";
+import { apiService, Deck } from "@/lib/api";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { DeckCard } from "@/components/decks/deck-card";
 import { CreateDeckDialog } from "@/components/decks/create-deck-dialog";
@@ -10,37 +10,34 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 export default function DecksPage() {
   const { isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "public" | "private">("all");
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    setIsLoading(true);
-    // Fetch user first, then decks
-    apiService.getMe().then(({ data: meData }) => {
-      if (meData) {
-        setMe(meData);
-        apiService.getMyDecks().then(({ data: deckData }) => {
-          if (deckData) setDecks(deckData);
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
-    });
+    fetchDecks();
   }, [isAuthenticated]);
+
+  const fetchDecks = async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await apiService.getMyDecks();
+      if (data) setDecks(data);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
 
   const shownDecks = useMemo(() => {
-    // Only my decks
-    let base = decks.filter(d => (me ? d.owner_id === me.id : false));
+    // Only my decks (already filtered by API /decks/my)
+    let base = decks;
     // Apply visibility tab within my decks
     if (visibilityFilter === 'public') base = base.filter(d => d.visibility === 'public');
     if (visibilityFilter === 'private') base = base.filter(d => d.visibility === 'private');
@@ -60,9 +57,9 @@ export default function DecksPage() {
       const lb = b.like_count ?? 0;
       return lb - la;
     });
-  }, [decks, me, searchTerm, visibilityFilter]);
+  }, [decks, searchTerm, visibilityFilter]);
 
-  const isOwner = (d: Deck) => (me ? d.owner_id === me.id : false);
+  const isOwner = (_d: Deck) => true;
 
   const handleCreated = (deck: Deck) => {
     setDecks((prev) => [deck, ...prev]);

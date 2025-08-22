@@ -238,7 +238,18 @@ class ApiService {
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
+      credentials: 'include',
       body: JSON.stringify({ refresh_token }),
+    });
+    return this.handleResponse(response);
+  }
+
+  async logout(): Promise<ApiResponse<any>> {
+    // Invalidate server-side session/cookies if applicable.
+    const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      credentials: 'include',
     });
     return this.handleResponse(response);
   }
@@ -267,7 +278,6 @@ class ApiService {
     const searchParams = new URLSearchParams();
     if (params?.search) searchParams.append('search', params.search);
     if (params?.tag) searchParams.append('tag', params.tag);
-    if (params?.visibility) searchParams.append('visibility', params.visibility);
     if (params?.page) searchParams.append('page', params.page.toString());
     if (params?.size) searchParams.append('size', params.size.toString());
     return this.request(`/decks/?${searchParams}`, {
@@ -477,8 +487,9 @@ class ApiService {
     });
   }
 
-  async completeTestSession(session_id: string, answers: TestAnswer[]): Promise<ApiResponse<TestSessionResult>> {
+  async completeTestSession(session_id: string, answers: TestAnswer[], started_at?: string): Promise<ApiResponse<TestSessionResult>> {
     const sp = new URLSearchParams({ session_id });
+    if (started_at != null) sp.append('started_at', started_at);
     // Coerce list payload to correct types and strip control chars from user_answer
     const body = (answers || []).map(a => ({
       card_id: Number(a.card_id),

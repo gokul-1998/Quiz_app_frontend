@@ -39,8 +39,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
   };
 
   return (
-    <CometCard className="w-full max-w-md">
-      <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-4">
           <div className="p-3 bg-primary rounded-full">
@@ -103,6 +102,5 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
         </CardFooter>
       </form>
     </Card>
-    </CometCard>
   );
 }
