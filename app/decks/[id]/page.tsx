@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function DeckDetailPage() {
   const params = useParams();
@@ -26,6 +27,7 @@ export default function DeckDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCards, setIsLoadingCards] = useState(true);
   const [me, setMe] = useState<Me | null>(null);
+  const [myDeckIds, setMyDeckIds] = useState<Set<number>>(new Set());
   const deckId = parseInt(params.id as string);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function DeckDetailPage() {
       fetchDeck();
       fetchCards();
       fetchMe();
+      fetchMyDecks();
     }
   }, [isAuthenticated, router, deckId]);
 
@@ -62,54 +65,17 @@ export default function DeckDetailPage() {
     }
   };
 
-  const confirmStartMatch = async () => {
-    if (!deck) return;
+  const fetchMyDecks = async () => {
     try {
-      // Use current perCardSeconds state for consistency
-      if (perCardSeconds.trim() === '') {
-        toast.error('Enter per-question time');
-        return;
+      const { data } = await apiService.getMyDecks();
+      if (data && Array.isArray(data)) {
+        setMyDeckIds(new Set(data.map((d) => d.id)));
       }
-      const perNum = Number(perCardSeconds);
-      if (!Number.isFinite(perNum) || perNum <= 0) {
-        toast.error('Per-question time must be a positive number');
-        return;
-      }
-      if (perNum < 3) {
-        toast.error('Per-question time must be at least 3 seconds');
-        return;
-      }
-
-      // Optional total time
-      let total: number | undefined = undefined;
-      if (totalTimeSeconds.trim() !== '') {
-        const totalNum = Number(totalTimeSeconds);
-        if (!Number.isFinite(totalNum) || totalNum <= 0) {
-          toast.error('Total time must be a positive number');
-          return;
-        }
-        total = totalNum;
-      }
-
-      const per = perNum;
-      const { data, error } = await apiService.startTestSession({ deck_id: deck.id, per_card_seconds: per, total_time_seconds: total });
-      if (error) {
-        const err = error.toLowerCase();
-        if (err.includes('403') || err.includes('forbidden')) {
-          toast.error('You are not allowed to start a test for this private deck.');
-        } else {
-          toast.error(error);
-        }
-        return;
-      }
-      toast.success('Match practice started');
-      if (data && (data as any).session_id) {
-        router.push(`/tests/session/${(data as any).session_id}?deckId=${deck.id}&perCard=${per}&qtype=match`);
-      }
-    } catch (e) {
-      toast.error('Failed to start match practice');
+    } catch (_) {
+      // ignore; ownership can still be derived from me/visibility
     }
   };
+  
 
   // Edit/Delete Deck state
   const [isEditDeckOpen, setIsEditDeckOpen] = useState(false);
@@ -262,6 +228,7 @@ export default function DeckDetailPage() {
   const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
   const [perCardSeconds, setPerCardSeconds] = useState<string>('20'); // default 20s, editable
   const [totalTimeSeconds, setTotalTimeSeconds] = useState<string>(''); // optional
+  const [selectedQtype, setSelectedQtype] = useState<'all' | 'mcq' | 'fillups' | 'match'>('all');
 
   const confirmStartTest = async () => {
     if (!deck) return;
@@ -306,7 +273,8 @@ export default function DeckDetailPage() {
       toast.success('Test started');
       setIsTimeDialogOpen(false);
       if (data && (data as any).session_id) {
-        router.push(`/tests/session/${(data as any).session_id}?deckId=${deck.id}&perCard=${per}`);
+        const qParam = selectedQtype !== 'all' ? `&qtype=${selectedQtype}` : '';
+        router.push(`/tests/session/${(data as any).session_id}?deckId=${deck.id}&perCard=${per}${qParam}`);
       }
     } catch (e) {
       toast.error('Failed to start test');
@@ -315,12 +283,13 @@ export default function DeckDetailPage() {
 
   const isOwner = useMemo(() => {
     if (!deck) return false;
-    // Primary check using authenticated user id
-    if (me) return deck.owner_id === me.id;
-    // Fallback: if the deck is private and visible, assume current viewer is the owner.
-    // This helps when /auth/me fails or is delayed, and private decks are owner-only visible.
+    // Primary: match owner_id with /auth/me
+    if (me && deck.owner_id === me.id) return true;
+    // Secondary: present in /decks/my list
+    if (myDeckIds.has(deck.id)) return true;
+    // Fallback: private decks are only visible to owner in this app
     return deck.visibility === 'private';
-  }, [deck, me]);
+  }, [deck, me, myDeckIds]);
 
   const fetchMe = async () => {
     try {
@@ -507,6 +476,22 @@ export default function DeckDetailPage() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="qType" className="text-right">Question type</Label>
+                        <div className="col-span-3">
+                          <Select value={selectedQtype} onValueChange={(value: 'all' | 'mcq' | 'fillups' | 'match') => setSelectedQtype(value)}>
+                            <SelectTrigger id="qType">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All</SelectItem>
+                              <SelectItem value="mcq">Multiple Choice</SelectItem>
+                              <SelectItem value="fillups">Fill in the Blanks</SelectItem>
+                              <SelectItem value="match">Matching</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="perCard" className="text-right">Per-question (s)</Label>
                         <Input
                           id="perCard"
@@ -572,9 +557,7 @@ export default function DeckDetailPage() {
                   </Button>
                 </>
               )}
-              <Button variant="outline" onClick={confirmStartMatch}>
-                Start Match Practice
-              </Button>
+              
             </div>
           </div>
         </div>

@@ -37,6 +37,47 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (typeof prompt === 'object' && prompt !== null && 'prompt' in prompt && 'desired_qtype' in prompt && 'count' in prompt) {
+      const { prompt: text, desired_qtype, count } = prompt as { prompt: string, desired_qtype: 'mcq' | 'fillups' | 'match', count: number };
+      if (!text.trim()) {
+        toast.error('Please enter a prompt');
+        return;
+      }
+      if (!Number.isFinite(count) || count <= 0) {
+        toast.error('Please enter a valid number of cards to generate');
+        return;
+      }
+      setIsGenerating(true);
+      try {
+        const results: CardType[] = [];
+        for (let i = 0; i < count; i++) {
+          const request: AIGenerateRequest = {
+            prompt: text.trim(),
+            desired_qtype,
+            count,
+          };
+          const { data, error } = await apiService.generateCard(request);
+          if (error || !data) {
+            toast.error('Failed to generate one of the cards');
+            continue;
+          }
+          results.push({
+            id: 0,
+            question: data.question,
+            answer: data.answer,
+            qtype: data.qtype,
+            options: data.options,
+          });
+        }
+        setGeneratedCards(results);
+        if (results.length > 0) toast.success(`Generated ${results.length} card(s)`);
+      } catch (error) {
+        toast.error('Failed to generate card');
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
     if (!prompt.trim()) {
       toast.error('Please enter a prompt');
       return;
@@ -49,27 +90,26 @@ export function AIGenerateDialog({ deckId, onCardCreated }: AIGenerateDialogProp
     setIsGenerating(true);
     
     try {
-      const results: CardType[] = [];
-      for (let i = 0; i < count; i++) {
-        const request: AIGenerateRequest = {
-          prompt: prompt.trim(),
-          desired_qtype: qtype,
-        };
-        const { data, error } = await apiService.generateCard(request);
-        if (error || !data) {
-          toast.error('Failed to generate one of the cards');
-          continue;
-        }
-        results.push({
-          id: 0,
-          question: data.question,
-          answer: data.answer,
-          qtype: data.qtype,
-          options: data.options,
-        });
+      const request: AIGenerateRequest = {
+        prompt: prompt.trim(),
+        desired_qtype: qtype,
+        count,
+      };
+      const { data, error } = await apiService.generateCard(request);
+      if (error || !data) {
+        toast.error('Failed to generate cards');
+        setGeneratedCards([]);
+        return;
       }
-      setGeneratedCards(results);
-      if (results.length > 0) toast.success(`Generated ${results.length} card(s)`);
+      const cards = Array.isArray(data) ? data : [data];
+      setGeneratedCards(cards.map(card => ({
+        id: 0,
+        question: card.question,
+        answer: card.answer,
+        qtype: card.qtype,
+        options: card.options,
+      })));
+      if (cards.length > 0) toast.success(`Generated ${cards.length} card(s)`);
     } catch (error) {
       toast.error('Failed to generate card');
     } finally {

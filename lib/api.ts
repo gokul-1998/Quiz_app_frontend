@@ -46,6 +46,7 @@ export interface Card {
 export interface AIGenerateRequest {
   prompt: string;
   desired_qtype: 'mcq' | 'fillups' | 'match';
+  count?: number;
 }
 
 export interface AIQuestion {
