@@ -36,7 +36,10 @@ export default function TestResultPage() {
 
   const accuracyPct = useMemo(() => {
     if (!result) return 0;
-    return Math.round((result.accuracy ?? (result.total_cards ? (result.correct_answers / result.total_cards) : 0)) * 100);
+    // Backends may return accuracy as a ratio (0-1) or already as percent (0-100)
+    const raw = result.accuracy ?? (result.total_cards ? (result.correct_answers / result.total_cards) : 0);
+    const ratio = raw > 1 ? raw / 100 : raw;
+    return Number((ratio * 100).toFixed(2));
   }, [result]);
 
   if (!result) {
@@ -49,7 +52,8 @@ export default function TestResultPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p>Try completing a test again, or go back to your dashboard.</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-6">
+              <Button variant="outline" onClick={() => router.push("/history")}>View History</Button>
               <Button onClick={() => router.push("/dashboard")}>Back to Dashboard</Button>
             </div>
           </CardContent>
@@ -108,7 +112,7 @@ export default function TestResultPage() {
             {result.answers.map((a, idx) => (
               <div key={idx} className="rounded border p-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">Card #{a.card_id}</div>
+                  <div className="text-sm text-muted-foreground">Your Result</div>
                   <Badge variant={a.is_correct ? "default" : "destructive"}>
                     {a.is_correct ? "Correct" : "Incorrect"}
                   </Badge>

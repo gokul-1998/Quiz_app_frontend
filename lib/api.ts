@@ -460,8 +460,77 @@ class ApiService {
     sp.append('size', String(params?.size ?? 20));
     if (params?.deck_id != null) sp.append('deck_id', String(params.deck_id));
     if (params?.only_completed !== undefined) sp.append('only_completed', String(params.only_completed));
-    return this.request(`/tests/history?${sp.toString()}`, {
+
+    // Try preferred tests history endpoint first
+    const primary = await this.request<TestHistoryResponse>(`/tests/history?${sp.toString()}`, {
       method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    if (!primary.error && primary.data) return primary;
+
+    // Fallback to OpenAPI /history/ endpoint and normalize
+    const fallback = await this.request<{ total: number; items: any[] }>(`/history/?${sp.toString()}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    if (fallback.error || !fallback.data) return { error: primary.error || fallback.error } as ApiResponse<TestHistoryResponse>;
+
+    const normalized: TestHistoryResponse = {
+      total: Number(fallback.data.total ?? fallback.data.items?.length ?? 0),
+      page: Number(params?.page ?? 1),
+      size: Number(params?.size ?? 20),
+      items: (fallback.data.items || []).map((it: any) => ({
+        session_id: String(it.session_id),
+        deck_id: Number(it.deck_id),
+        deck_title: String(it.deck_title),
+        total_cards: Number(it.total_cards),
+        correct_answers: Number(it.correct_answers),
+        accuracy: Number(it.accuracy),
+        completed_at: it.completed_at ?? it.started_at ?? null,
+        is_completed: true,
+      })),
+    };
+    return { data: normalized };
+  }
+
+  // Explicit History endpoints (OpenAPI-style)
+  async getHistory(params?: { page?: number; size?: number }): Promise<ApiResponse<TestHistoryResponse>> {
+    const sp = new URLSearchParams();
+    sp.append('page', String(params?.page ?? 1));
+    sp.append('size', String(params?.size ?? 20));
+    const res = await this.request<{ total: number; items: any[] }>(`/history/?${sp.toString()}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+    if (res.error || !res.data) return res as unknown as ApiResponse<TestHistoryResponse>;
+    const normalized: TestHistoryResponse = {
+      total: Number(res.data.total ?? res.data.items?.length ?? 0),
+      page: Number(params?.page ?? 1),
+      size: Number(params?.size ?? 20),
+      items: (res.data.items || []).map((it: any) => ({
+        session_id: String(it.session_id),
+        deck_id: Number(it.deck_id),
+        deck_title: String(it.deck_title),
+        total_cards: Number(it.total_cards),
+        correct_answers: Number(it.correct_answers),
+        accuracy: Number(it.accuracy),
+        completed_at: it.completed_at ?? it.started_at ?? null,
+        is_completed: true,
+      })),
+    };
+    return { data: normalized };
+  }
+
+  async getHistoryDetail(session_id: string): Promise<ApiResponse<Record<string, any>>> {
+    return this.request(`/history/${encodeURIComponent(session_id)}`, {
+      method: 'GET',
+      headers: this.getAuthHeaders(),
+    });
+  }
+
+  async deleteHistory(session_id: string): Promise<ApiResponse<any>> {
+    return this.request(`/history/${encodeURIComponent(session_id)}`, {
+      method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
   }

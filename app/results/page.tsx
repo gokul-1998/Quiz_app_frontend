@@ -85,7 +85,7 @@ export default function ResultsPage() {
             <div className="space-y-2 max-h-64 overflow-auto pr-2">
               {result.answers.map((a, idx) => (
                 <div key={idx} className="flex items-center justify-between border rounded p-2 text-sm">
-                  <div>Card #{a.card_id}</div>
+                  <div>Your Result</div>
                   <div className="truncate max-w-[60%]">Answer: {a.user_answer}</div>
                   {typeof a.is_correct === 'boolean' && (
                     <span className={`px-2 py-0.5 rounded text-white ${a.is_correct ? 'bg-green-600' : 'bg-red-600'}`}>

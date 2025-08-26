@@ -20,6 +20,30 @@ export default function StarredPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchStarred();
+    // Listen to global events for cross-page sync
+    const onFav = (e: Event) => {
+      // Refresh the starred list when any deck's favourite state changes
+      fetchStarred();
+    };
+    const onDeleted = (e: Event) => {
+      try {
+        const anyEvt = e as CustomEvent<{ deckId: number }>;
+        const id = anyEvt?.detail?.deckId;
+        if (typeof id === 'number') {
+          setDecks(prev => prev.filter(d => d.id !== id));
+        }
+      } catch {}
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('deck:favourite-changed', onFav as EventListener);
+      window.addEventListener('deck:deleted', onDeleted as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('deck:favourite-changed', onFav as EventListener);
+        window.removeEventListener('deck:deleted', onDeleted as EventListener);
+      }
+    };
   }, [isAuthenticated]);
 
   const fetchStarred = async () => {
@@ -103,7 +127,14 @@ export default function StarredPage() {
                 key={deck.id}
                 deck={deck}
                 canManage={isOwner(deck)}
-                onUpdate={(updated) => setDecks(prev => prev.map(d => d.id === updated.id ? updated : d))}
+                onUpdate={(updated) =>
+                  setDecks(prev => {
+                    // If deck is unstarred, remove from list
+                    if (!updated.favourite) return prev.filter(d => d.id !== updated.id);
+                    // Otherwise update in place if present
+                    return prev.map(d => (d.id === updated.id ? updated : d));
+                  })
+                }
                 onDelete={(id) => setDecks(prev => prev.filter(d => d.id !== id))}
               />
             ))}

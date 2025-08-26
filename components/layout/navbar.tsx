@@ -41,6 +41,7 @@ export function Navbar() {
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/decks', label: 'Decks' },
+    { href: '/history', label: 'History' },
     { href: '/starred', label: 'Starred' },
   ];
 

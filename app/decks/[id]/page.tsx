@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, BookOpen, Heart, Star, Calendar, Eye, Plus, Play } from 'lucide-react';
+import { ArrowLeft, BookOpen, Heart, Star, Calendar, Eye, Plus, Play, MoreVertical } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -131,6 +132,12 @@ export default function DeckDetailPage() {
         return;
       }
       toast.success('Deck deleted');
+      // Notify other pages
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('deck:deleted', { detail: { deckId: deck.id } }));
+        }
+      } catch (_e) {}
       router.push('/decks');
     } catch (_) {
       toast.error('Failed to delete deck');
@@ -343,6 +350,8 @@ export default function DeckDetailPage() {
         liked: !prev.liked,
         like_count: prev.liked ? prev.like_count - 1 : prev.like_count + 1,
       } : prev);
+      // Refetch to ensure persisted server state
+      await fetchDeck();
     } catch (error) {
       toast.error('Failed to update like status');
     }
@@ -364,6 +373,17 @@ export default function DeckDetailPage() {
         ...prev,
         favourite: !prev.favourite,
       } : prev);
+
+      // Notify other pages
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('deck:favourite-changed', {
+            detail: { deckId: deck.id, favourite: !deck.favourite },
+          }));
+        }
+      } catch (_e) {}
+      // Refetch to ensure persisted server state
+      await fetchDeck();
     } catch (error) {
       toast.error('Failed to update favorite status');
     }
@@ -380,6 +400,73 @@ export default function DeckDetailPage() {
   const parseTags = (tags?: string) => {
     if (!tags) return [];
     return tags.split(',').map(tag => tag.trim()).filter(Boolean);
+  };
+
+  const renderContent = () => {
+    if (!deck) return null;
+    if (deck.visibility === 'private' && !isOwner) {
+      return (
+        <Card className="text-center py-12">
+          <CardContent>
+            <CardTitle className="text-xl mb-2">Private Deck</CardTitle>
+            <CardDescription>
+              Cards are only visible to the deck owner.
+            </CardDescription>
+          </CardContent>
+        </Card>
+      );
+    }
+    if (isLoadingCards) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-6 bg-muted rounded w-1/4 mb-4"></div>
+                <div className="h-4 bg-muted rounded w-full mb-2"></div>
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+    if (cards.length === 0) {
+      return (
+        <Card className="text-center py-12">
+          <CardContent>
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <CardTitle className="text-xl mb-2">No Cards Yet</CardTitle>
+            <CardDescription className="mb-6">
+              Add your first flashcard to start building this deck
+            </CardDescription>
+            <div className="text-sm text-muted-foreground">Use the buttons in the top-right to add cards.</div>
+          </CardContent>
+        </Card>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {cards.map((card: CardType) => (
+          <div key={card.id} className="space-y-3">
+            <CardPreview card={card} />
+            {isOwner && (
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => openEditCard(card)}>Edit</Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deletingCardId === card.id}
+                  onClick={() => handleDeleteCard(card.id)}
+                >
+                  {deletingCardId === card.id ? 'Deleting...' : 'Delete'}
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   if (!isAuthenticated) {
@@ -411,9 +498,10 @@ export default function DeckDetailPage() {
       </div>
     );
   }
-
-  return (
-    <div className="container mx-auto px-4 py-8">
+  const PageContent = () => {
+    if (!deck) return null;
+    return (
+      <div className="container mx-auto px-4 py-8">
       {/* Back Button */}
       <Button variant="ghost" className="mb-6" onClick={() => router.push('/dashboard')}>
         <ArrowLeft className="mr-2 h-4 w-4" />
@@ -478,7 +566,7 @@ export default function DeckDetailPage() {
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="qType" className="text-right">Question type</Label>
                         <div className="col-span-3">
-                          <Select value={selectedQtype} onValueChange={(value: 'all' | 'mcq' | 'fillups' | 'match') => setSelectedQtype(value)}>
+                          <Select value={selectedQtype} onValueChange={(value) => setSelectedQtype(value as any)}>
                             <SelectTrigger id="qType">
                               <SelectValue />
                             </SelectTrigger>
@@ -526,11 +614,8 @@ export default function DeckDetailPage() {
                 <>
                   <CreateCardDialog deckId={deckId} onCardCreated={handleCardCreated} />
                   <AIGenerateDialog deckId={deckId} onCardCreated={handleCardCreated} />
-                  {/* Edit Deck */}
+                  {/* Edit Deck Dialog remains; opened via the three-dot menu */}
                   <Dialog open={isEditDeckOpen} onOpenChange={setIsEditDeckOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline">Edit Deck</Button>
-                    </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Edit Deck</DialogTitle>
@@ -552,74 +637,31 @@ export default function DeckDetailPage() {
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
-                  <Button variant="destructive" onClick={handleDeleteDeck} disabled={isDeletingDeck}>
-                    {isDeletingDeck ? 'Deleting...' : 'Delete Deck'}
-                  </Button>
+
+                  {/* Three-dot actions menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label="Deck actions">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setIsEditDeckOpen(true)}>Edit Deck</DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleDeleteDeck} disabled={isDeletingDeck} className="text-destructive focus:text-destructive">
+                        {isDeletingDeck ? 'Deleting...' : 'Delete Deck'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
-              
-            </div>
+              </div>
           </div>
         </div>
       </div>
 
-      {deck.visibility === 'private' && !isOwner ? (
-        <Card className="text-center py-12">
-          <CardContent>
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <CardTitle className="text-xl mb-2">Private Deck</CardTitle>
-            <CardDescription>
-              Cards are only visible to the deck owner.
-            </CardDescription>
-          </CardContent>
-        </Card>
-      ) : isLoadingCards ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-6 bg-muted rounded w-1/4 mb-4"></div>
-                <div className="h-4 bg-muted rounded w-full mb-2"></div>
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : cards.length === 0 ? (
-        <Card className="text-center py-12">
-          <CardContent>
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <CardTitle className="text-xl mb-2">No Cards Yet</CardTitle>
-            <CardDescription className="mb-6">
-              Add your first flashcard to start building this deck
-            </CardDescription>
-            <div className="text-sm text-muted-foreground">Use the buttons in the top-right to add cards.</div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {cards.map((card: CardType) => (
-            <div key={card.id} className="space-y-3">
-              <CardPreview card={card} />
-              {isOwner && (
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => openEditCard(card)}>Edit</Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={deletingCardId === card.id}
-                    onClick={() => handleDeleteCard(card.id)}
-                  >
-                    {deletingCardId === card.id ? 'Deleting...' : 'Delete'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+        {renderContent()}
       {/* Edit Card Dialog */}
-      {isOwner && editingCard && (
+        {isOwner && editingCard && (
         <Dialog open={!!editingCard} onOpenChange={(open) => !open && closeEditCard()}>
           <DialogContent>
             <DialogHeader>
@@ -671,7 +713,9 @@ export default function DeckDetailPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
+  return <PageContent />;
 }

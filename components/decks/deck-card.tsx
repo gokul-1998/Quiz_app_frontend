@@ -77,6 +77,15 @@ export function DeckCard({ deck, canManage = false, onUpdate, onDelete }: DeckCa
           favourite: !deck.favourite,
         });
       }
+
+      // Notify other pages
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('deck:favourite-changed', {
+            detail: { deckId: deck.id, favourite: !deck.favourite },
+          }));
+        }
+      } catch {}
     } catch (error) {
       toast.error('Failed to update favorite status');
     } finally {
@@ -93,6 +102,15 @@ export function DeckCard({ deck, canManage = false, onUpdate, onDelete }: DeckCa
       if (onDelete) {
         onDelete(deck.id);
       }
+
+      // Notify other pages
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('deck:deleted', {
+            detail: { deckId: deck.id },
+          }));
+        }
+      } catch {}
     } catch (error) {
       toast.error('Failed to delete deck');
     } finally {

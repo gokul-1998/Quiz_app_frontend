@@ -196,6 +196,11 @@ export default function TestRunnerPage() {
     if (!current) return;
     if (!submitted) {
       let userAns = answer;
+      // Require selection for MCQ before submit
+      if (current.qtype === 'mcq' && (!userAns || userAns.trim() === '')) {
+        toast.error('Please select an option');
+        return;
+      }
       if (current.qtype === 'match') {
         if (!allPaired) {
           toast.error('Please pair all items before submitting');
@@ -329,18 +334,31 @@ export default function TestRunnerPage() {
     if (card.qtype === 'mcq' && card.options && card.options.length > 0) {
       return (
         <div className="space-y-2">
-          {card.options.map((opt, idx) => (
-            <label key={idx} className={`flex items-center gap-2 rounded border p-2 cursor-pointer ${answer === opt ? 'bg-muted' : ''}`}>
-              <input
-                type="radio"
-                name="mcq"
-                value={opt}
-                checked={answer === opt}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAnswer(e.target.value)}
-              />
-              <span>{opt}</span>
-            </label>
-          ))}
+          {card.options.map((opt, idx) => {
+            const isCorrect = submitted && opt === card.answer;
+            const isUserWrong = submitted && answer === opt && opt !== card.answer;
+            const stateClass = isCorrect
+              ? 'border-green-500 bg-green-50 text-green-700'
+              : isUserWrong
+              ? 'border-red-500 bg-red-50 text-red-700'
+              : (answer === opt && !submitted ? 'bg-muted' : '');
+            return (
+              <label
+                key={idx}
+                className={`flex items-center gap-2 rounded border p-2 cursor-pointer transition-colors ${stateClass}`}
+              >
+                <input
+                  type="radio"
+                  name="mcq"
+                  value={opt}
+                  checked={answer === opt}
+                  disabled={submitted || isSubmitting}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAnswer(e.target.value)}
+                />
+                <span>{opt}</span>
+              </label>
+            );
+          })}
         </div>
       );
     }
