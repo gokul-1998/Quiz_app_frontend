@@ -5,11 +5,13 @@ import { authManager, AuthState } from '@/lib/auth';
 
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>(authManager.getAuthState());
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     // Ensure fresh state from localStorage after hydration
     authManager.syncFromStorage();
     const unsubscribe = authManager.subscribe(setAuthState);
+    setHydrated(true);
     return unsubscribe;
   }, []);
 
@@ -34,6 +36,7 @@ export function useAuth() {
 
   return {
     ...authState,
+    hydrated,
     login,
     register,
     logout,

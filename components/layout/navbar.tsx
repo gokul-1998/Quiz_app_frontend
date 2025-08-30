@@ -17,7 +17,7 @@ import { BookOpen, User, LogOut, Menu, X } from 'lucide-react';
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, hydrated, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -59,7 +59,10 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {isAuthenticated ? (
+            {!hydrated ? (
+              // Show placeholder during hydration to prevent mismatch
+              <div className="h-9 w-16 bg-muted animate-pulse rounded-md" />
+            ) : isAuthenticated ? (
               <>
                 {navLinks.map((link) => (
                   <Link
@@ -121,7 +124,7 @@ export function Navbar() {
         </div>
 
         {/* Mobile Navigation */}
-        {isAuthenticated && isMobileMenuOpen && (
+        {hydrated && isAuthenticated && isMobileMenuOpen && (
           <div className="md:hidden py-4 border-t">
             <div className="flex flex-col space-y-2">
               {navLinks.map((link) => (
