@@ -310,7 +310,7 @@ class ApiService {
     });
   }
 
-  async updateDeck(deckId: number, updates: Partial<Pick<Deck, 'title' | 'description'>>): Promise<ApiResponse<Deck>> {
+  async updateDeck(deckId: number, updates: Partial<Pick<Deck, 'title' | 'description' | 'tags' | 'visibility'>>): Promise<ApiResponse<Deck>> {
     return this.request(`/decks/${deckId}`, {
       method: 'PATCH',
       headers: this.getAuthHeaders(),
