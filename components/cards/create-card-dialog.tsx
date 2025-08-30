@@ -19,6 +19,7 @@ import { Card as CardType, apiService } from '@/lib/api';
 import { Plus, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardPreview } from './card-preview';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
 
 interface CreateCardDialogProps {
   deckId: number;
@@ -29,19 +30,27 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
-  const [qtype, setQtype] = useState<'mcq' | 'fillups' | 'match'>('mcq');
+  const [qtype, setQtype] = useState<'mcq' | 'fillups' | 'match' | 'flashcard'>('mcq');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
   // Match type: exactly 4 pairs (left prompts and right answers)
   const [matchLeft, setMatchLeft] = useState<string[]>(['', '', '', '']);
   const [matchRight, setMatchRight] = useState<string[]>(['', '', '', '']);
+  // Flashcard type: front and back
+  const [flashcardFront, setFlashcardFront] = useState('');
+  const [flashcardBack, setFlashcardBack] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate basics only for non-matching types
-    if (qtype !== 'match') {
+    // Validate basics for different question types
+    if (qtype === 'flashcard') {
+      if (!flashcardFront.trim() || !flashcardBack.trim()) {
+        toast.error('Please fill in both front and back of the flashcard');
+        return;
+      }
+    } else if (qtype !== 'match') {
       if (!question.trim() || !answer.trim()) {
         toast.error('Please fill in both question and answer');
         return;
@@ -81,15 +90,25 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
       let cardData: any = {};
 
       if (qtype === 'match') {
-        // For matching: question holds left items, options holds right (to allow shuffling later),
-        // and answer encodes the correct mapping by row as "0->0,1->1,2->2,3->3".
+        // For matching: send pairs array as expected by backend
         const left = matchLeft.map(v => v.trim());
         const right = matchRight.map(v => v.trim());
+        const pairs = left.map((leftItem, index) => ({
+          left: leftItem,
+          right: right[index]
+        }));
         cardData = {
-          question: left.join('|'),
-          answer: '0->0,1->1,2->2,3->3',
+          question: 'Match the following items',
+          answer: '',
           qtype: 'match',
-          options: right,
+          pairs: pairs,
+        };
+      } else if (qtype === 'flashcard') {
+        // For flashcard: question is front, answer is back
+        cardData = {
+          question: flashcardFront.trim(),
+          answer: flashcardBack.trim(),
+          qtype: 'flashcard',
         };
       } else {
         cardData = {
@@ -128,6 +147,8 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
     setOptions(['', '', '', '']);
     setMatchLeft(['', '', '', '']);
     setMatchRight(['', '', '', '']);
+    setFlashcardFront('');
+    setFlashcardBack('');
     setShowPreview(false);
   };
 
@@ -157,6 +178,8 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
   const canPreview =
     qtype === 'match'
       ? matchLeft.every(v => v.trim()) && matchRight.every(v => v.trim())
+      : qtype === 'flashcard'
+      ? flashcardFront.trim() && flashcardBack.trim()
       : question.trim() && answer.trim() && (qtype !== 'mcq' || options.every(opt => opt.trim()));
 
   const previewCard: CardType = (() => {
@@ -167,6 +190,14 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
         answer: '0->0,1->1,2->2,3->3',
         qtype: 'match',
         options: matchRight,
+      } as CardType;
+    }
+    if (qtype === 'flashcard') {
+      return {
+        id: 0,
+        question: flashcardFront,
+        answer: flashcardBack,
+        qtype: 'flashcard',
       } as CardType;
     }
     return {
@@ -219,7 +250,7 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="qtype">Question Type</Label>
-                <Select value={qtype} onValueChange={(value: 'mcq' | 'fillups' | 'match') => setQtype(value)}>
+                <Select value={qtype} onValueChange={(value: 'mcq' | 'fillups' | 'match' | 'flashcard') => setQtype(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -227,11 +258,35 @@ export function CreateCardDialog({ deckId, onCardCreated }: CreateCardDialogProp
                     <SelectItem value="mcq">Multiple Choice</SelectItem>
                     <SelectItem value="fillups">Fill in the Blanks</SelectItem>
                     <SelectItem value="match">Matching</SelectItem>
+                    <SelectItem value="flashcard">Flashcard</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
-              {qtype !== 'match' ? (
+              {qtype === 'flashcard' ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="flashcard-front">Front of Card *</Label>
+                    <MarkdownEditor
+                      value={flashcardFront}
+                      onChange={setFlashcardFront}
+                      placeholder="Enter the front of your flashcard (e.g., question, term, concept). Supports **markdown** and image paste!"
+                      disabled={isLoading}
+                      height={150}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="flashcard-back">Back of Card *</Label>
+                    <MarkdownEditor
+                      value={flashcardBack}
+                      onChange={setFlashcardBack}
+                      placeholder="Enter the back of your flashcard (e.g., answer, definition, explanation). Supports **markdown** and image paste!"
+                      disabled={isLoading}
+                      height={150}
+                    />
+                  </div>
+                </>
+              ) : qtype !== 'match' ? (
                 <div className="grid gap-2">
                   <Label htmlFor="question">Question *</Label>
                   <Textarea

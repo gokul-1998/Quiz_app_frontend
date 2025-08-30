@@ -39,7 +39,7 @@ export interface Card {
   id: number;
   question: string;
   answer: string;
-  qtype: 'mcq' | 'fillups' | 'match';
+  qtype: 'mcq' | 'fillups' | 'match' | 'flashcard';
   options?: string[];
 }
 
@@ -597,7 +597,44 @@ class ApiService {
     });
   }
 
-  // ... (rest of the code remains the same)
+  // Upload endpoints
+  async uploadImage(file: File): Promise<ApiResponse<{ url: string; filename: string; size: number }>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('access_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/upload/image`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    
+    return this.handleResponse(response);
+  }
+
+  async uploadImageFromClipboard(file: File): Promise<ApiResponse<{ url: string; filename: string; size: number }>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('access_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/upload/image-from-clipboard`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    
+    return this.handleResponse(response);
+  }
 
 }
 

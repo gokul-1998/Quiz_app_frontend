@@ -7,7 +7,9 @@ import { Deck, Card as CardType, apiService, Me } from '@/lib/api';
 import { CardPreview } from '@/components/cards/card-preview';
 import { CreateCardDialog } from '@/components/cards/create-card-dialog';
 import { AIGenerateDialog } from '@/components/cards/ai-generate-dialog';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { Button } from '@/components/ui/button';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -172,8 +174,12 @@ export default function DeckDetailPage() {
       toast.error('Question is required');
       return;
     }
-    if (!editAnswer.trim()) {
+    if (!editAnswer.trim() && editingCard.qtype !== 'flashcard') {
       toast.error('Answer is required');
+      return;
+    }
+    if (editingCard.qtype === 'flashcard' && (!editQuestion.trim() || !editAnswer.trim())) {
+      toast.error('Both front and back of flashcard are required');
       return;
     }
     if (editingCard.qtype === 'mcq') {
@@ -663,20 +669,45 @@ export default function DeckDetailPage() {
       {/* Edit Card Dialog */}
         {isOwner && editingCard && (
         <Dialog open={!!editingCard} onOpenChange={(open) => !open && closeEditCard()}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Card</DialogTitle>
               <DialogDescription>Update the question, answer, and options.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="q">Question</Label>
-                <Input id="q" value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="a">Answer</Label>
-                <Input id="a" value={editAnswer} onChange={(e) => setEditAnswer(e.target.value)} />
-              </div>
+              {editingCard.qtype === 'flashcard' ? (
+                <>
+                  <div>
+                    <Label htmlFor="q">Front of Card</Label>
+                    <MarkdownEditor
+                      value={editQuestion}
+                      onChange={setEditQuestion}
+                      placeholder="Enter the front of your flashcard..."
+                      height={180}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="a">Back of Card</Label>
+                    <MarkdownEditor
+                      value={editAnswer}
+                      onChange={setEditAnswer}
+                      placeholder="Enter the back of your flashcard..."
+                      height={180}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="q">Question</Label>
+                    <Input id="q" value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="a">Answer</Label>
+                    <Input id="a" value={editAnswer} onChange={(e) => setEditAnswer(e.target.value)} />
+                  </div>
+                </>
+              )}
               {editingCard.qtype === 'mcq' && (
                 <div>
                   <Label>Options</Label>

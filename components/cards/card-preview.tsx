@@ -3,7 +3,10 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Card as CardType } from '@/lib/api';
-import { HelpCircle, CheckCircle, WatchIcon as MatchesIcon } from 'lucide-react';
+import { HelpCircle, CheckCircle, WatchIcon as MatchesIcon, CreditCard } from 'lucide-react';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
+import '@uiw/react-markdown-preview/markdown.css';
 
 interface CardPreviewProps {
   card: CardType;
@@ -19,6 +22,8 @@ export function CardPreview({ card, showAnswer = false }: CardPreviewProps) {
         return <HelpCircle className="h-4 w-4" />;
       case 'match':
         return <MatchesIcon className="h-4 w-4" />;
+      case 'flashcard':
+        return <CreditCard className="h-4 w-4" />;
       default:
         return <HelpCircle className="h-4 w-4" />;
     }
@@ -32,6 +37,8 @@ export function CardPreview({ card, showAnswer = false }: CardPreviewProps) {
         return 'Fill in the Blanks';
       case 'match':
         return 'Matching';
+      case 'flashcard':
+        return 'Flashcard';
       default:
         return 'Unknown';
     }
@@ -48,10 +55,19 @@ export function CardPreview({ card, showAnswer = false }: CardPreviewProps) {
         </div>
         
         <div className="space-y-4">
-          <div>
-            <h3 className="font-medium text-sm text-muted-foreground mb-2">Question</h3>
-            <p className="text-base leading-relaxed">{card.question}</p>
-          </div>
+          {card.qtype === 'flashcard' ? (
+            <div>
+              <h3 className="font-medium text-sm text-muted-foreground mb-2">Front</h3>
+              <div className="prose prose-sm max-w-none">
+                <MDEditor.Markdown source={card.question} />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h3 className="font-medium text-sm text-muted-foreground mb-2">Question</h3>
+              <p className="text-base leading-relaxed">{card.question}</p>
+            </div>
+          )}
 
           {card.qtype === 'mcq' && card.options && (
             <div>
@@ -78,9 +94,17 @@ export function CardPreview({ card, showAnswer = false }: CardPreviewProps) {
 
           {showAnswer && (
             <div>
-              <h3 className="font-medium text-sm text-muted-foreground mb-2">Answer</h3>
+              <h3 className="font-medium text-sm text-muted-foreground mb-2">
+                {card.qtype === 'flashcard' ? 'Back' : 'Answer'}
+              </h3>
               <div className="p-3 rounded-lg bg-green-50 border border-green-200">
-                <p className="text-green-900 font-medium">{card.answer}</p>
+                {card.qtype === 'flashcard' ? (
+                  <div className="prose prose-sm max-w-none text-green-900">
+                    <MDEditor.Markdown source={card.answer} />
+                  </div>
+                ) : (
+                  <p className="text-green-900 font-medium">{card.answer}</p>
+                )}
               </div>
             </div>
           )}
